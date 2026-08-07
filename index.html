@@ -117,8 +117,8 @@
 
         // Initialize the map centered between Peninsular Malaysia and Sabah
         const map = L.map('map', {
-            zoomControl: false, // Move zoom control to bottom right
-            layers: [osm] // Set default layer
+            zoomControl: false, 
+            layers: [osm] 
         }).setView([4.8000, 109.0000], 6);
 
         L.control.zoom({
@@ -141,6 +141,7 @@
             { name: "Lahad Datu", lat: 5.0270, lon: 118.3300, type: "Primary (JUPEM)", desc: "East Coast Station" },
             { name: "Tawau", lat: 4.2445, lon: 117.8912, type: "Primary (JUPEM)", desc: "Southeast Coast Station" },
             { name: "Labuan", lat: 5.2767, lon: 115.2444, type: "Primary (Federal)", desc: "Federal Territory / Offshore West" },
+            { name: "Bintulu, Sarawak", lat: 3.2620, lon: 113.0640, type: "Primary (JUPEM)", desc: "Sarawak Coastal Reference Station" },
             
             // Secondary / Predictive Nodes
             { name: "Pulau Banggi", lat: 7.2833, lon: 117.1833, type: "Secondary", desc: "Northern Island Node" },
@@ -180,7 +181,7 @@
             // Open-Meteo Marine API URL for direct CSV download
             const csvDownloadUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${station.lat}&longitude=${station.lon}&hourly=sea_level_height_msl&timezone=Asia%2FSingapore&format=csv`;
 
-            // Setup popup content with new Graph Button
+            // Setup popup content
             const popupContent = `
                 <div class="p-1 min-w-[190px]">
                     <h3 class="font-bold text-lg mb-1">${station.name}</h3>
@@ -235,10 +236,12 @@
                 
                 const data = await response.json();
                 
-                // Format times for labels
+                // Format times for labels (Outputs array for 2-line rendering in Chart.js)
                 const labels = data.hourly.time.map(t => {
                     const d = new Date(t);
-                    return d.toLocaleDateString('en-GB', { weekday: 'short', hour: '2-digit', minute:'2-digit' });
+                    const dateStr = d.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
+                    const timeStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute:'2-digit' });
+                    return [dateStr, timeStr];
                 });
                 
                 const heights = data.hourly.sea_level_height_msl;
@@ -262,12 +265,12 @@
                         datasets: [{
                             label: 'Sea Level Height (m)',
                             data: heights,
-                            borderColor: '#3b82f6', // Tailwind blue-500
+                            borderColor: '#3b82f6', 
                             backgroundColor: 'rgba(59, 130, 246, 0.15)',
                             borderWidth: 2,
                             fill: true,
-                            tension: 0.4, // Smooth curves
-                            pointRadius: 0, // Hide points unless hovered
+                            tension: 0.4, 
+                            pointRadius: 0, 
                             pointHitRadius: 10,
                             pointHoverRadius: 5,
                             pointHoverBackgroundColor: '#ef4444'
@@ -282,13 +285,18 @@
                         },
                         plugins: {
                             legend: {
-                                display: false // Hide legend to save space
+                                display: false 
                             },
                             tooltip: {
                                 backgroundColor: 'rgba(0, 0, 0, 0.8)',
                                 titleFont: { size: 13 },
                                 bodyFont: { size: 14, weight: 'bold' },
                                 callbacks: {
+                                    // Join the array cleanly for the tooltip header
+                                    title: function(context) {
+                                        const label = context[0].label;
+                                        return Array.isArray(label) ? label.join(' ') : label;
+                                    },
                                     label: function(context) {
                                         return `${context.parsed.y} meters (MSL)`;
                                     }
@@ -299,7 +307,7 @@
                             x: {
                                 grid: { display: false },
                                 ticks: {
-                                    maxTicksLimit: 7, // Show roughly 1 tick per day
+                                    maxTicksLimit: 7, 
                                     maxRotation: 0
                                 }
                             },
