@@ -3,356 +3,615 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sabah Tide Stations Map</title>
+    <title>ROVULA Marine Operations Console</title>
     
-    <!-- Tailwind CSS for UI styling -->
+    <!-- Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-    
-    <!-- Chart.js for Tide Graph -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
     <style>
-        body, html { margin: 0; padding: 0; height: 100%; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        #map { height: 100vh; width: 100vw; z-index: 1; }
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;700&display=swap');
+        body { 
+            font-family: 'Sarabun', sans-serif; 
+            background-color: #0f172a; /* Slate 900 */
+            color: #e2e8f0; /* Slate 200 */
+            margin: 0; padding: 0;
+        }
+
+        /* Hide scrollbar for cleaner UI but keep functionality */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+        /* Custom Animations */
+        .loading-spinner {
+            border: 2px solid #334155; border-top: 2px solid #38bdf8; border-radius: 50%;
+            width: 14px; height: 14px; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* Custom map markers */
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); }
+        .transition-all { transition-duration: 0.3s; }
+
+        /* Map and Z-Index Fixes */
+        .leaflet-pane { z-index: 10 !important; }
+        .leaflet-top, .leaflet-bottom { z-index: 20 !important; }
+        
+        /* Dark Theme Leaflet Overrides */
+        .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+            background: #1e293b !important; /* Slate 800 */
+            color: #f1f5f9 !important;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5) !important;
+        }
+        .leaflet-container a.leaflet-popup-close-button {
+            color: #94a3b8 !important;
+        }
+        
+        /* Tide Map specific */
+        #tideMap { height: calc(100vh - 72px); width: 100vw; z-index: 1; }
         .primary-marker {
-            background-color: #ef4444; /* Tailwind red-500 */
-            border: 3px solid white;
-            border-radius: 50%;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            background-color: #ef4444; border: 2px solid #1e293b; border-radius: 50%;
+            box-shadow: 0 0 10px rgba(239,68,68,0.5);
         }
         .secondary-marker {
-            background-color: #3b82f6; /* Tailwind blue-500 */
-            border: 2px solid white;
-            border-radius: 50%;
-            box-shadow: 0 0 5px rgba(0,0,0,0.4);
+            background-color: #3b82f6; border: 2px solid #1e293b; border-radius: 50%;
+            box-shadow: 0 0 5px rgba(59,130,246,0.5);
         }
-
-        /* Overlay UI positioning */
-        .ui-overlay {
-            position: absolute;
-            z-index: 1000;
-        }
-
-        /* Modal Z-index above Leaflet controls */
-        #graphModal {
-            z-index: 2000;
-        }
+        .ui-overlay { position: absolute; z-index: 1000; }
+        #tideGraphModal { z-index: 2000; }
     </style>
 </head>
-<body class="relative">
+<body class="relative flex flex-col min-h-screen overflow-x-hidden">
 
-    <!-- Map Container -->
-    <div id="map"></div>
-
-    <!-- Info Panel / Legend -->
-    <div class="ui-overlay top-4 left-4 sm:top-6 sm:left-6 bg-white/90 backdrop-blur-sm p-5 rounded-xl shadow-lg border border-gray-200 max-w-sm">
-        <h1 class="text-xl font-bold text-gray-800 mb-2">Sabah Tide Stations</h1>
-        <p class="text-sm text-gray-600 mb-4">Locations of official JUPEM tide gauges and key secondary predictive nodes for nearshore operations.</p>
-        
-        <div class="space-y-3">
-            <div class="flex items-center">
-                <div class="w-4 h-4 rounded-full bg-red-500 border-2 border-white shadow-sm mr-3"></div>
-                <span class="text-sm font-semibold text-gray-800">Primary Station (JUPEM)</span>
+    <!-- Global App Header / Switcher -->
+    <nav class="bg-slate-900 border-b border-slate-800 sticky top-0 z-[1500] h-[72px] flex items-center justify-between px-4 sm:px-6">
+        <div class="flex items-center gap-3">
+            <div class="bg-sky-600 text-white p-2 rounded-lg shadow-sm">
+                <i class="fa-solid fa-anchor text-lg"></i>
             </div>
-            <div class="flex items-center">
-                <div class="w-3 h-3 rounded-full bg-blue-500 border-2 border-white shadow-sm mr-3 ml-0.5"></div>
-                <span class="text-sm text-gray-700">Secondary / Predictive Node</span>
+            <div class="hidden sm:block">
+                <h1 class="text-sm font-bold text-white leading-tight">ROVULA</h1>
+                <div class="text-[10px] text-slate-400">Marine Operations</div>
             </div>
         </div>
 
-        <div class="mt-5 pt-4 border-t border-gray-200">
-            <p class="text-xs text-gray-500 italic mb-2">Click on any marker to view the station name and details. Coordinates are approximate for general reference.</p>
-            <p class="text-xs text-blue-600 font-semibold">Tide data is provided directly via the open-source Open-Meteo Marine API.</p>
-        </div>
-    </div>
-
-    <!-- Tide Graph Modal -->
-    <div id="graphModal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
-        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl p-5 relative flex flex-col h-[80vh] max-h-[600px]">
-            <!-- Close Button -->
-            <button onclick="closeModal()" class="absolute top-4 right-4 p-1 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        <!-- Toggle Switch -->
+        <div class="flex bg-slate-800 p-1 rounded-xl shadow-inner border border-slate-700">
+            <button onclick="switchTab('tide')" id="tab-tide" class="px-4 py-1.5 text-sm font-medium rounded-lg transition-all text-white bg-slate-700 shadow-sm">
+                <i class="fa-solid fa-water mr-1"></i> Tide Stations
             </button>
+            <button onclick="switchTab('weather')" id="tab-weather" class="px-4 py-1.5 text-sm font-medium rounded-lg transition-all text-slate-400 hover:text-white">
+                <i class="fa-solid fa-cloud-sun mr-1"></i> Weather Forecast
+            </button>
+        </div>
+
+        <div class="text-xs text-slate-500 hidden sm:flex gap-4">
+            <span id="weather-api-status" class="flex items-center gap-2 hidden">
+                <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> OpenWeather API
+            </span>
+            <span class="flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full bg-sky-500"></div> Open-Meteo API
+            </span>
+        </div>
+    </nav>
+
+    <!-- ============================================== -->
+    <!-- SECTION 1: TIDE STATIONS MAP                   -->
+    <!-- ============================================== -->
+    <div id="section-tide" class="relative w-full">
+        <!-- Tide Map Container -->
+        <div id="tideMap"></div>
+
+        <!-- Tide Info Panel -->
+        <div class="ui-overlay top-4 left-4 sm:top-6 sm:left-6 bg-slate-800/95 backdrop-blur-md p-5 rounded-xl shadow-2xl border border-slate-700 max-w-sm">
+            <h1 class="text-lg font-bold text-white mb-1">Regional Tide Stations</h1>
+            <p class="text-xs text-slate-400 mb-4">Official JUPEM tide gauges and key secondary predictive nodes.</p>
             
-            <h2 id="modalTitle" class="text-xl font-bold text-gray-800 pr-8">7-Day Tide Forecast</h2>
-            <p class="text-sm text-gray-500 mb-4">Relative to Mean Sea Level (MSL)</p>
-            
-            <!-- Loading Indicator -->
-            <div id="loadingIndicator" class="flex-grow flex flex-col items-center justify-center text-gray-500">
-                <svg class="animate-spin h-8 w-8 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <span>Fetching oceanographic data...</span>
+            <div class="space-y-3">
+                <div class="flex items-center">
+                    <div class="w-4 h-4 rounded-full bg-red-500 border-2 border-slate-800 shadow-sm mr-3"></div>
+                    <span class="text-sm font-medium text-slate-200">Primary Station (JUPEM)</span>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-3 h-3 rounded-full bg-blue-500 border-2 border-slate-800 shadow-sm mr-3 ml-0.5"></div>
+                    <span class="text-sm text-slate-300">Secondary / Predictive Node</span>
+                </div>
             </div>
-            
-            <!-- Chart Container -->
-            <div id="chartContainer" class="flex-grow relative hidden w-full h-full min-h-[300px]">
-                <canvas id="tideChart"></canvas>
+            <div class="mt-5 pt-4 border-t border-slate-700">
+                <p class="text-xs text-slate-500 italic">Click markers for details & 7-day MSL graphs.</p>
+            </div>
+        </div>
+
+        <!-- Tide Graph Modal -->
+        <div id="tideGraphModal" class="hidden fixed inset-0 bg-slate-900/80 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div class="bg-slate-800 rounded-xl shadow-2xl border border-slate-700 w-full max-w-4xl p-5 relative flex flex-col h-[80vh] max-h-[600px]">
+                <button onclick="closeTideModal()" class="absolute top-4 right-4 p-1 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+                
+                <h2 id="tideModalTitle" class="text-xl font-bold text-white pr-8">7-Day Tide Forecast</h2>
+                <p class="text-sm text-slate-400 mb-4">Relative to Mean Sea Level (MSL)</p>
+                
+                <div id="tideLoadingIndicator" class="flex-grow flex flex-col items-center justify-center text-slate-400">
+                    <div class="loading-spinner mb-3 h-8 w-8 !border-4 !border-slate-700 !border-t-sky-500"></div>
+                    <span>Fetching oceanographic data...</span>
+                </div>
+                
+                <div id="tideChartContainer" class="flex-grow relative hidden w-full h-full min-h-[300px]">
+                    <canvas id="tideChart"></canvas>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    
+
+    <!-- ============================================== -->
+    <!-- SECTION 2: WEATHER FORECASTING                 -->
+    <!-- ============================================== -->
+    <div id="section-weather" class="hidden flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+        
+        <div id="api-status-msg" class="hidden mb-6 rounded-lg p-4 border border-red-500/50 bg-red-900/20 text-red-400 text-sm"></div>
+
+        <!-- Controls Section -->
+        <div class="bg-slate-800 rounded-xl p-6 shadow-md border border-slate-700 mb-6">
+            <div class="flex flex-col md:flex-row justify-between md:items-center gap-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-white" id="location-title">Loading...</h2>
+                    <p class="text-sky-400 text-sm mt-1 flex items-center gap-2">
+                        <i class="fa-solid fa-location-dot"></i>
+                        <span id="location-coords">Waiting for selection...</span>
+                    </p>
+                </div>
+                
+                <div class="w-full md:w-72">
+                    <label class="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Select Region</label>
+                    <div class="relative z-30">
+                        <select id="location-select" onchange="changeWeatherLocation()" class="appearance-none w-full bg-slate-900 border border-slate-700 text-slate-200 py-2.5 px-4 pr-8 rounded-lg leading-tight focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 cursor-pointer shadow-inner text-sm font-medium">
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
+                            <i class="fa-solid fa-chevron-down text-xs"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Weather Map Section -->
+        <div class="bg-slate-800 rounded-xl shadow-md border border-slate-700 p-1 mb-6 overflow-hidden">
+            <div id="weatherMap" class="h-64 w-full rounded-lg bg-slate-900 z-0"></div>
+        </div>
+
+        <!-- Metric Cards -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
+            <div class="bg-slate-800 rounded-xl p-5 shadow-md border border-slate-700 border-b-4 border-b-cyan-500 card-hover transition-all">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Wind Speed</p>
+                        <div class="flex items-baseline gap-1 mt-1">
+                            <span id="current-wind" class="text-3xl font-bold text-white">--</span>
+                            <span class="text-sm text-slate-500">m/s</span>
+                        </div>
+                    </div>
+                    <div class="bg-cyan-900/40 p-2 rounded-full text-cyan-400"><i class="fa-solid fa-wind text-lg"></i></div>
+                </div>
+                <p id="wind-desc" class="text-xs text-slate-400 flex items-center gap-1 truncate"><i class="fa-regular fa-compass"></i> --</p>
+            </div>
+
+            <div class="bg-slate-800 rounded-xl p-5 shadow-md border border-slate-700 border-b-4 border-b-indigo-500 card-hover transition-all">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Est. Wave Height</p>
+                        <div class="flex items-baseline gap-1 mt-1">
+                            <span id="current-wave" class="text-3xl font-bold text-white">--</span>
+                            <span class="text-sm text-slate-500">m</span>
+                        </div>
+                    </div>
+                    <div class="bg-indigo-900/40 p-2 rounded-full text-indigo-400"><i class="fa-solid fa-water text-lg"></i></div>
+                </div>
+                <p class="text-xs text-slate-400 truncate">Wind-Wave Model</p>
+            </div>
+
+             <div class="bg-slate-800 rounded-xl p-5 shadow-md border border-slate-700 border-b-4 border-b-blue-400 card-hover transition-all">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Precipitation (1h)</p>
+                        <div class="flex items-baseline gap-1 mt-1">
+                            <span id="current-rain" class="text-3xl font-bold text-white">--</span>
+                            <span class="text-sm text-slate-500">mm</span>
+                        </div>
+                    </div>
+                    <div class="bg-blue-900/40 p-2 rounded-full text-blue-400"><i class="fa-solid fa-cloud-showers-heavy text-lg"></i></div>
+                </div>
+                <p class="text-xs text-slate-400 truncate">Volume</p>
+            </div>
+
+            <div class="bg-slate-800 rounded-xl p-5 shadow-md border border-slate-700 border-b-4 border-b-orange-400 card-hover transition-all">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Condition</p>
+                        <div class="flex items-baseline gap-1 mt-1">
+                            <span id="current-temp" class="text-3xl font-bold text-white">--</span>
+                            <span class="text-sm text-slate-500">°C</span>
+                        </div>
+                    </div>
+                    <div class="bg-orange-900/40 p-2 rounded-full text-orange-400"><i class="fa-solid fa-cloud-sun text-lg"></i></div>
+                </div>
+                <p id="weather-condition" class="text-xs text-slate-400 capitalize truncate">--</p>
+            </div>
+        </div>
+
+        <!-- Chart Section -->
+        <div class="bg-slate-800 rounded-xl shadow-md border border-slate-700 p-6 mb-8">
+            <div class="flex flex-col lg:flex-row justify-between items-center mb-6 gap-4">
+                <div>
+                    <h3 class="text-lg font-bold text-white">Forecast & Historical Analysis</h3>
+                    <div class="flex flex-wrap items-center gap-3 text-xs mt-2 text-slate-400">
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-slate-500 rounded-sm"></span> History</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-cyan-400 rounded-sm"></span> Real</span>
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 border border-slate-500 border-dashed rounded-sm"></span> Projection</span>
+                    </div>
+                </div>
+                
+                <div class="flex flex-col sm:flex-row gap-3 items-center w-full lg:w-auto">
+                    <button onclick="downloadCSV()" class="w-full sm:w-auto px-4 py-2 bg-emerald-600/20 border border-emerald-500/50 hover:bg-emerald-600/40 text-emerald-400 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-file-csv"></i> Download CSV
+                    </button>
+                    <div class="bg-slate-900 p-1 rounded-lg inline-flex flex-wrap justify-center w-full sm:w-auto border border-slate-700">
+                        <button onclick="updateTimeframe('past-year')" id="btn-past-year" class="px-3 py-1.5 text-xs font-semibold rounded-md transition-all text-slate-400 hover:text-white">Past 1Y</button>
+                        <button onclick="updateTimeframe('future-month')" id="btn-future-month" class="px-3 py-1.5 text-xs font-semibold rounded-md transition-all text-slate-400 hover:text-white">Next 1M</button>
+                        <button onclick="updateTimeframe('future-quarter')" id="btn-future-quarter" class="px-3 py-1.5 text-xs font-semibold rounded-md transition-all text-slate-400 hover:text-white">Next 3M</button>
+                        <button onclick="updateTimeframe('future-year')" id="btn-future-year" class="px-3 py-1.5 text-xs font-semibold rounded-md transition-all text-slate-400 hover:text-white">Next 1Y</button>
+                    </div>
+                </div>
+            </div>
+            <div class="relative h-[400px] w-full">
+                <canvas id="weatherChart"></canvas>
+            </div>
+        </div>
+
+        <div class="border-t border-slate-700 pt-6">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-2 text-slate-400 text-sm">
+                    <i class="fa-solid fa-code"></i> <span>Export Integration Code:</span>
+                </div>
+                <div class="flex gap-3">
+                    <button onclick="downloadCode('python')" class="px-3 py-2 bg-slate-900 border border-slate-700 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-colors"><i class="fa-brands fa-python text-sky-400 mr-1"></i> .py</button>
+                    <button onclick="downloadCode('r')" class="px-3 py-2 bg-slate-900 border border-slate-700 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-colors"><i class="fa-solid fa-r text-sky-500 mr-1"></i> .R</button>
+                    <button onclick="downloadCode('java')" class="px-3 py-2 bg-slate-900 border border-slate-700 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-colors"><i class="fa-brands fa-java text-red-400 mr-1"></i> .java</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- ============================================== -->
+    <!-- GLOBAL JAVASCRIPT                              -->
+    <!-- ============================================== -->
     <script>
-        // Base Layers
-        const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 12,
-            minZoom: 5,
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        });
+        // Set Chart.js global defaults for Dark Mode
+        Chart.defaults.color = '#94a3b8'; // text-slate-400
+        Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.05)';
 
-        const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            maxZoom: 12,
-            minZoom: 5,
-            attribution: 'Tiles &copy; Esri'
-        });
+        const DARK_TILE_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+        const DARK_TILE_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>';
 
-        // Initialize the map centered between Peninsular Malaysia and Sabah
-        const map = L.map('map', {
-            zoomControl: false, 
-            layers: [osm] 
-        }).setView([4.8000, 109.0000], 6);
+        // === TAB SWITCHING LOGIC ===
+        function switchTab(tabId) {
+            const tideSec = document.getElementById('section-tide');
+            const weatherSec = document.getElementById('section-weather');
+            const btnTide = document.getElementById('tab-tide');
+            const btnWeather = document.getElementById('tab-weather');
 
-        L.control.zoom({
-            position: 'bottomright'
-        }).addTo(map);
+            if (tabId === 'tide') {
+                tideSec.classList.remove('hidden');
+                weatherSec.classList.add('hidden');
+                
+                btnTide.className = "px-4 py-1.5 text-sm font-medium rounded-lg transition-all text-white bg-slate-700 shadow-sm";
+                btnWeather.className = "px-4 py-1.5 text-sm font-medium rounded-lg transition-all text-slate-400 hover:text-white";
+                
+                // Fix Leaflet rendering bug when unhidden
+                setTimeout(() => { tideMap.invalidateSize(); }, 50);
+            } else {
+                tideSec.classList.add('hidden');
+                weatherSec.classList.remove('hidden');
+                
+                btnWeather.className = "px-4 py-1.5 text-sm font-medium rounded-lg transition-all text-white bg-slate-700 shadow-sm";
+                btnTide.className = "px-4 py-1.5 text-sm font-medium rounded-lg transition-all text-slate-400 hover:text-white";
+                
+                setTimeout(() => { weatherMap.invalidateSize(); }, 50);
+            }
+        }
 
-        // Add Layer Control (Map Type Selector)
-        const baseMaps = {
-            "OpenStreetMap": osm,
-            "Satellite (Esri)": satellite
-        };
-        L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
 
-        // Tide Station Data
-        const stations = [
-            // Primary JUPEM & Federal Stations
-            { name: "Kota Kinabalu", lat: 5.9804, lon: 116.0735, type: "Primary (JUPEM)", desc: "West Coast Reference Station" },
+        // ==============================================
+        // TIDE STATIONS LOGIC (Adapted from Source 2)
+        // ==============================================
+        let tideMap, tideChartInstance = null;
+
+        const tideStations = [
+            { name: "Kota Kinabalu", lat: 5.9804, lon: 116.0735, type: "Primary (JUPEM)", desc: "West Coast Reference" },
             { name: "Kudat", lat: 6.8845, lon: 116.8488, type: "Primary (JUPEM)", desc: "Northern Tip Station" },
             { name: "Sandakan", lat: 5.8394, lon: 118.1172, type: "Primary (JUPEM)", desc: "Northeast Coast Station" },
             { name: "Lahad Datu", lat: 5.0270, lon: 118.3300, type: "Primary (JUPEM)", desc: "East Coast Station" },
             { name: "Tawau", lat: 4.2445, lon: 117.8912, type: "Primary (JUPEM)", desc: "Southeast Coast Station" },
-            { name: "Labuan", lat: 5.2767, lon: 115.2444, type: "Primary (Federal)", desc: "Federal Territory / Offshore West" },
-            { name: "Bintulu, Sarawak", lat: 3.2620, lon: 113.0640, type: "Primary (JUPEM)", desc: "Sarawak Coastal Reference Station" },
-            
-            // Secondary / Predictive Nodes (Sabah / East Malaysia)
+            { name: "Labuan", lat: 5.2767, lon: 115.2444, type: "Primary (Federal)", desc: "Offshore West" },
+            { name: "Bintulu, Sarawak", lat: 3.2620, lon: 113.0640, type: "Primary (JUPEM)", desc: "Sarawak Coastal Ref" },
             { name: "Pulau Banggi", lat: 7.2833, lon: 117.1833, type: "Secondary", desc: "Northern Island Node" },
-            { name: "Pulau Mangalum", lat: 6.2000, lon: 115.5833, type: "Secondary", desc: "Offshore West Node" },
-            { name: "Sipitang", lat: 5.0833, lon: 115.5500, type: "Secondary", desc: "Brunei Bay Node" },
-            { name: "Pulau Mantanani", lat: 6.7167, lon: 116.3333, type: "Secondary", desc: "Northwest Offshore Node" },
-            { name: "Labuk Bay", lat: 6.0000, lon: 117.6667, type: "Secondary", desc: "Northeast Coastal Node" },
-            { name: "Semporna", lat: 4.4833, lon: 118.6167, type: "Secondary", desc: "East Coast Gateway Node" },
-            
-            // Peninsular Malaysia Nodes
-            { name: "Pelabuhan Klang", lat: 3.0333, lon: 101.3667, type: "Primary (JUPEM)", desc: "West Coast Peninsular Reference Station" },
-            { name: "Kerteh (PETRONAS Penapisan)", lat: 4.5320, lon: 103.4460, type: "Secondary", desc: "Terengganu Offshore Node" },
-
-            // Gulf of Thailand Nodes
+            { name: "Semporna", lat: 4.4833, lon: 118.6167, type: "Secondary", desc: "East Coast Gateway" },
             { name: "Rayong", lat: 12.6700, lon: 101.2800, type: "Secondary", desc: "Eastern Gulf Coast Node" },
-            { name: "แหลมฉบัง (Laem Chabang)", lat: 13.0800, lon: 100.8800, type: "Secondary", desc: "Major Deep Sea Port Node" },
-            { name: "Chon Buri", lat: 13.3600, lon: 100.9800, type: "Secondary", desc: "Upper Eastern Gulf Node" },
-            { name: "มาบตาพุด (Map Ta Phut)", lat: 12.6667, lon: 101.1500, type: "Secondary", desc: "Industrial Port Node" },
-            { name: "สงขลา (Songkhla)", lat: 7.2000, lon: 100.5900, type: "Secondary", desc: "Lower Gulf Coast Node" }
+            { name: "แหลมฉบัง (Laem Chabang)", lat: 13.0800, lon: 100.8800, type: "Secondary", desc: "Deep Sea Port" },
+            { name: "Chon Buri", lat: 13.3600, lon: 100.9800, type: "Secondary", desc: "Upper Eastern Gulf" },
+            { name: "มาบตาพุด (Map Ta Phut)", lat: 12.6667, lon: 101.1500, type: "Secondary", desc: "Industrial Port" },
+            { name: "สงขลา (Songkhla)", lat: 7.2000, lon: 100.5900, type: "Secondary", desc: "Lower Gulf Coast" }
         ];
 
-        // Create custom icons using L.divIcon
-        const primaryIcon = L.divIcon({
-            className: 'primary-marker',
-            iconSize: [18, 18],
-            iconAnchor: [9, 9]
-        });
+        function initTideMap() {
+            const darkTiles = L.tileLayer(DARK_TILE_URL, { attribution: DARK_TILE_ATTR, maxZoom: 12, minZoom: 5 });
+            tideMap = L.map('tideMap', { zoomControl: false, layers: [darkTiles] }).setView([6.5, 108.0], 5);
+            L.control.zoom({ position: 'bottomright' }).addTo(tideMap);
 
-        const secondaryIcon = L.divIcon({
-            className: 'secondary-marker',
-            iconSize: [12, 12],
-            iconAnchor: [6, 6]
-        });
+            const primaryIcon = L.divIcon({ className: 'primary-marker', iconSize: [16, 16], iconAnchor: [8, 8] });
+            const secondaryIcon = L.divIcon({ className: 'secondary-marker', iconSize: [12, 12], iconAnchor: [6, 6] });
 
-        // Add markers to the map
-        stations.forEach(station => {
-            const isPrimary = station.type.includes("Primary");
-            const marker = L.marker([station.lat, station.lon], {
-                icon: isPrimary ? primaryIcon : secondaryIcon
-            }).addTo(map);
+            tideStations.forEach(station => {
+                const isPrimary = station.type.includes("Primary");
+                const marker = L.marker([station.lat, station.lon], { icon: isPrimary ? primaryIcon : secondaryIcon }).addTo(tideMap);
 
-            const buttonColorClass = isPrimary ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600';
+                const btnColor = isPrimary ? 'bg-red-600 hover:bg-red-500' : 'bg-blue-600 hover:bg-blue-500';
+                const csvUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${station.lat}&longitude=${station.lon}&hourly=sea_level_height_msl&timezone=Asia%2FSingapore&format=csv`;
 
-            // Open-Meteo Marine API URL for direct CSV download
-            const csvDownloadUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${station.lat}&longitude=${station.lon}&hourly=sea_level_height_msl&timezone=Asia%2FSingapore&format=csv`;
-
-            // Setup popup content
-            const popupContent = `
-                <div class="p-1 min-w-[190px]">
-                    <h3 class="font-bold text-lg mb-1">${station.name}</h3>
-                    <p class="text-sm font-semibold ${isPrimary ? 'text-red-600' : 'text-blue-600'} mb-1">${station.type}</p>
-                    <p class="text-xs text-gray-600 mb-2">${station.desc}</p>
-                    <div class="text-xs bg-gray-100 p-2 rounded border border-gray-200 mb-3">
-                        Lat: ${station.lat.toFixed(4)}°<br>
-                        Lon: ${station.lon.toFixed(4)}°
+                marker.bindPopup(`
+                    <div class="p-1 min-w-[190px]">
+                        <h3 class="font-bold text-lg text-white mb-1">${station.name}</h3>
+                        <p class="text-sm font-semibold ${isPrimary ? 'text-red-400' : 'text-blue-400'} mb-1">${station.type}</p>
+                        <p class="text-xs text-slate-400 mb-2">${station.desc}</p>
+                        <div class="text-xs bg-slate-900/50 p-2 rounded border border-slate-700 mb-3 text-slate-300">
+                            Lat: ${station.lat.toFixed(4)}°<br>Lon: ${station.lon.toFixed(4)}°
+                        </div>
+                        <button onclick="showTideGraph(${station.lat}, ${station.lon}, '${station.name}')" class="block w-full text-center ${btnColor} text-white font-medium py-2 px-3 rounded transition-colors text-sm mb-2">📊 Show 7-Day Graph</button>
+                        <a href="${csvUrl}" target="_blank" class="block w-full text-center bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-200 font-medium py-1.5 px-3 rounded transition-colors text-xs">Download CSV</a>
                     </div>
-                    
-                    <button onclick="showTideGraph(${station.lat}, ${station.lon}, '${station.name}')" class="block w-full text-center ${buttonColorClass} text-white font-medium py-2 px-3 rounded shadow-sm transition-colors text-sm mb-2">
-                        📊 Show 7-Day Graph
-                    </button>
-                    
-                    <a href="${csvDownloadUrl}" target="_blank" rel="noopener noreferrer" class="block w-full text-center bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-700 font-medium py-1.5 px-3 rounded shadow-sm transition-colors text-xs" download>
-                        Download CSV
-                    </a>
-                </div>
-            `;
-            
-            marker.bindPopup(popupContent);
-        });
+                `);
+            });
+        }
 
-        // --- GRAPH LOGIC ---
-        let tideChartInstance = null;
-
-        async function showTideGraph(lat, lon, stationName) {
-            const modal = document.getElementById('graphModal');
-            const title = document.getElementById('modalTitle');
-            const loading = document.getElementById('loadingIndicator');
-            const chartCont = document.getElementById('chartContainer');
-            
-            // Reset UI State
-            modal.classList.remove('hidden');
-            title.innerText = `7-Day Tide Forecast: ${stationName}`;
-            loading.classList.remove('hidden');
-            loading.innerHTML = `
-                <svg class="animate-spin h-8 w-8 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <span>Fetching oceanographic data...</span>
-            `;
-            chartCont.classList.add('hidden');
+        async function showTideGraph(lat, lon, name) {
+            document.getElementById('tideGraphModal').classList.remove('hidden');
+            document.getElementById('tideModalTitle').innerText = `7-Day Tide Forecast: ${name}`;
+            document.getElementById('tideLoadingIndicator').classList.remove('hidden');
+            document.getElementById('tideChartContainer').classList.add('hidden');
 
             try {
-                // Fetch JSON data for 7 days
-                const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=sea_level_height_msl&timezone=Asia%2FSingapore`;
-                const response = await fetch(url);
+                const res = await fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=sea_level_height_msl&timezone=Asia%2FSingapore`);
+                const data = await res.json();
                 
-                if (!response.ok) throw new Error('Network response was not ok');
-                
-                const data = await response.json();
-                
-                // Format times for labels (Outputs array for 2-line rendering in Chart.js)
                 const labels = data.hourly.time.map(t => {
                     const d = new Date(t);
-                    const dateStr = d.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
-                    const timeStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute:'2-digit' });
-                    return [dateStr, timeStr];
+                    return [
+                        d.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' }),
+                        d.toLocaleTimeString('en-GB', { hour: '2-digit', minute:'2-digit' })
+                    ];
                 });
                 
-                const heights = data.hourly.sea_level_height_msl;
+                document.getElementById('tideLoadingIndicator').classList.add('hidden');
+                document.getElementById('tideChartContainer').classList.remove('hidden');
 
-                // Hide loading, show canvas container
-                loading.classList.add('hidden');
-                chartCont.classList.remove('hidden');
+                if (tideChartInstance) tideChartInstance.destroy();
 
-                const ctx = document.getElementById('tideChart').getContext('2d');
-                
-                // Destroy old chart if it exists
-                if (tideChartInstance) {
-                    tideChartInstance.destroy();
-                }
-
-                // Create new chart
-                tideChartInstance = new Chart(ctx, {
+                tideChartInstance = new Chart(document.getElementById('tideChart').getContext('2d'), {
                     type: 'line',
                     data: {
                         labels: labels,
                         datasets: [{
-                            label: 'Sea Level Height (m)',
-                            data: heights,
-                            borderColor: '#3b82f6', 
-                            backgroundColor: 'rgba(59, 130, 246, 0.15)',
-                            borderWidth: 2,
-                            fill: true,
-                            tension: 0.4, 
-                            pointRadius: 0, 
-                            pointHitRadius: 10,
-                            pointHoverRadius: 5,
-                            pointHoverBackgroundColor: '#ef4444'
+                            label: 'Height (m)',
+                            data: data.hourly.sea_level_height_msl,
+                            borderColor: '#38bdf8', 
+                            backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                            borderWidth: 2, fill: true, tension: 0.4, 
+                            pointRadius: 0, pointHitRadius: 10, pointHoverRadius: 5, pointHoverBackgroundColor: '#ef4444'
                         }]
                     },
                     options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        interaction: {
-                            mode: 'index',
-                            intersect: false,
-                        },
+                        responsive: true, maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
                         plugins: {
-                            legend: {
-                                display: false 
-                            },
+                            legend: { display: false },
                             tooltip: {
-                                backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                                titleFont: { size: 13 },
-                                bodyFont: { size: 14, weight: 'bold' },
+                                backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                                titleColor: '#f8fafc', bodyColor: '#f8fafc',
                                 callbacks: {
-                                    // Join the array cleanly for the tooltip header
-                                    title: function(context) {
-                                        const label = context[0].label;
-                                        return Array.isArray(label) ? label.join(' ') : label;
-                                    },
-                                    label: function(context) {
-                                        return `${context.parsed.y} meters (MSL)`;
-                                    }
+                                    title: (ctx) => Array.isArray(ctx[0].label) ? ctx[0].label.join(' ') : ctx[0].label,
+                                    label: (ctx) => `${ctx.parsed.y} m (MSL)`
                                 }
                             }
                         },
-                        scales: {
-                            x: {
-                                grid: { display: false },
-                                ticks: {
-                                    maxTicksLimit: 7, 
-                                    maxRotation: 0
-                                }
-                            },
-                            y: {
-                                title: {
-                                    display: true,
-                                    text: 'Height (meters)'
-                                },
-                                grid: {
-                                    color: 'rgba(0, 0, 0, 0.05)'
-                                }
-                            }
-                        }
+                        scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 7 } }, y: { title: { display: true, text: 'Meters' } } }
                     }
                 });
-
-            } catch (error) {
-                console.error("Error fetching tide data:", error);
-                loading.innerHTML = `
-                    <div class="text-red-500 text-center">
-                        <svg class="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        <p class="font-bold">Failed to load data.</p>
-                        <p class="text-sm text-gray-500">Please check your connection and try again.</p>
-                    </div>
-                `;
+            } catch (e) {
+                document.getElementById('tideLoadingIndicator').innerHTML = `<p class="text-red-400 font-bold">Failed to load data.</p>`;
             }
         }
 
-        function closeModal() {
-            document.getElementById('graphModal').classList.add('hidden');
+        function closeTideModal() { document.getElementById('tideGraphModal').classList.add('hidden'); }
+
+
+        // ==============================================
+        // WEATHER FORECAST LOGIC (Adapted from Source 3)
+        // ==============================================
+        const API_KEY = "d53631302a4cfe2aadd0fbd727276c72";
+        const WEATHER_LOCS = [
+            { id: "east", name: "Eastern Thailand", lat: 12.67, lon: 101.27 },
+            { id: "south_gulf", name: "Southern Gulf", lat: 9.14, lon: 99.88 }, 
+            { id: "andaman", name: "Andaman Sea", lat: 7.88, lon: 98.39 },
+            { id: "sabah", name: "Sabah, Malaysia", lat: 6.00, lon: 116.00 },
+            { id: "sarawak", name: "Sarawak, Malaysia", lat: 3.20, lon: 113.00 }
+        ];
+
+        let weatherLoc = WEATHER_LOCS[0], weatherMap, weatherMarker;
+        let weatherChart, globalData = [], currentView = 'future-month';
+
+        function initWeatherDropdown() {
+            const select = document.getElementById('location-select');
+            WEATHER_LOCS.forEach(loc => { select.add(new Option(loc.name, loc.id)); });
         }
 
-        // Close modal when clicking outside the content area
-        document.getElementById('graphModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeModal();
+        function initWeatherMap() {
+            const darkTiles = L.tileLayer(DARK_TILE_URL, { attribution: DARK_TILE_ATTR, maxZoom: 18 });
+            weatherMap = L.map('weatherMap', { layers: [darkTiles] }).setView([weatherLoc.lat, weatherLoc.lon], 7);
+            const icon = L.divIcon({ className: 'custom-div-icon', html: "<div style='background-color:#38bdf8; width:16px; height:16px; border-radius:50%; border:3px solid #0f172a;'></div>" });
+            weatherMarker = L.marker([weatherLoc.lat, weatherLoc.lon], { icon }).addTo(weatherMap);
+        }
+
+        async function changeWeatherLocation() {
+            weatherLoc = WEATHER_LOCS.find(l => l.id === document.getElementById('location-select').value);
+            document.getElementById('location-title').innerText = weatherLoc.name;
+            document.getElementById('location-coords').innerHTML = `${weatherLoc.lat}, ${weatherLoc.lon}`;
+
+            if (weatherMap) {
+                weatherMap.flyTo([weatherLoc.lat, weatherLoc.lon], 8);
+                weatherMarker.setLatLng([weatherLoc.lat, weatherLoc.lon]);
             }
-        });
+
+            document.getElementById('weather-api-status').classList.remove('hidden');
+
+            const realData = await fetchWeatherData(weatherLoc.lat, weatherLoc.lon);
+            const histData = generateHistorical(realData, 365);
+            const projData = generateProjections(realData, 365);
+            
+            globalData = [...histData, ...realData, ...projData];
+            updateTimeframe(currentView);
+        }
+
+        async function fetchWeatherData(lat, lon) {
+            try {
+                const [curr, fore] = await Promise.all([
+                    fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${API_KEY}`).then(r=>r.json()),
+                    fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=metric&appid=${API_KEY}`).then(r=>r.json())
+                ]);
+
+                document.getElementById('current-wind').innerText = curr.wind.speed;
+                document.getElementById('current-temp').innerText = Math.round(curr.main.temp);
+                document.getElementById('wind-desc').innerHTML = `<i class="fa-regular fa-compass"></i> ${curr.wind.deg}°`;
+                document.getElementById('weather-condition').innerText = curr.weather[0].description;
+                document.getElementById('current-rain').innerText = curr.rain ? (curr.rain['1h'] || 0) : 0;
+                document.getElementById('current-wave').innerText = (0.025 * Math.pow(curr.wind.speed, 1.5)).toFixed(2);
+
+                const processed = [], seen = new Set();
+                fore.list.forEach(item => {
+                    const d = new Date(item.dt * 1000), dStr = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+                    if (!seen.has(dStr) && d.getHours() >= 9) {
+                        seen.add(dStr);
+                        processed.push({
+                            date: dStr, rawDate: d, wind: item.wind.speed, 
+                            wave: parseFloat((0.025 * Math.pow(item.wind.speed, 1.5)).toFixed(2)),
+                            rain: item.rain ? (item.rain['3h'] || 0) : 0, type: 'real'
+                        });
+                    }
+                });
+                return processed;
+            } catch (e) {
+                document.getElementById('api-status-msg').classList.remove('hidden');
+                document.getElementById('api-status-msg').innerText = `Error: ${e.message}`;
+                return Array.from({length: 5}, (_, i) => ({ date: `Day ${i+1}`, rawDate: new Date(), wind: 5, wave: 0.8, rain: 0, type: 'real' }));
+            }
+        }
+
+        function generateHistorical(realData, totalDays) {
+            const history = [], start = realData[0] ? new Date(realData[0].rawDate) : new Date();
+            let baseWind = realData[0] ? realData[0].wind : 5;
+            for (let i = totalDays; i >= 1; i--) {
+                const d = new Date(start); d.setDate(d.getDate() - i);
+                let w = Math.max(1, baseWind + (Math.random()-0.5)*3 + Math.sin(d.getMonth()/2)*2);
+                history.push({ date: d.toLocaleDateString('en-GB', {day:'numeric',month:'short'}), rawDate: d, wind: parseFloat(w.toFixed(2)), wave: parseFloat((0.025 * Math.pow(w, 1.5)).toFixed(2)), rain: Math.random()>0.6?Math.random()*8:0, type: 'historical' });
+            }
+            return history;
+        }
+
+        function generateProjections(realData, totalDays) {
+            const proj = [], start = realData.length ? new Date(realData[realData.length-1].rawDate) : new Date();
+            let lastW = realData.length ? realData[realData.length-1].wind : 5;
+            for (let i = 1; i <= totalDays; i++) {
+                const d = new Date(start); d.setDate(d.getDate() + i);
+                let w = Math.max(1, lastW + (Math.random()-0.5)*3 + Math.sin(d.getMonth()/2)*2);
+                proj.push({ date: d.toLocaleDateString('en-GB', {day:'numeric',month:'short'}), rawDate: d, wind: parseFloat(w.toFixed(2)), wave: parseFloat((0.025 * Math.pow(w, 1.5)).toFixed(2)), rain: Math.random()>0.7?Math.random()*10:0, type: 'projected' });
+                lastW = w;
+            }
+            return proj;
+        }
+
+        function initWeatherChart() {
+            weatherChart = new Chart(document.getElementById('weatherChart').getContext('2d'), {
+                type: 'line', data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+                    plugins: { 
+                        legend: { display: true },
+                        tooltip: { backgroundColor: 'rgba(15,23,42,0.9)', titleColor: '#fff', bodyColor: '#cbd5e1' }
+                    },
+                    scales: {
+                        y: { title: { display: true, text: 'Wind (m/s)' }, position: 'left' },
+                        y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Wave (m)' } },
+                        y2: { display: false }
+                    }
+                }
+            });
+        }
+
+        function updateTimeframe(period) {
+            currentView = period;
+            const todayIdx = globalData.findIndex(d => d.type === 'real');
+            let s = todayIdx, e = globalData.length;
+            
+            if (period === 'past-year') { s = 0; e = todayIdx + 5; }
+            else if (period === 'future-month') e = Math.min(globalData.length, todayIdx + 30);
+            else if (period === 'future-quarter') e = Math.min(globalData.length, todayIdx + 90);
+            else if (period === 'future-year') e = Math.min(globalData.length, todayIdx + 365);
+
+            const slice = globalData.slice(s, e);
+            
+            ['past-year', 'future-month', 'future-quarter', 'future-year'].forEach(p => {
+                const btn = document.getElementById(`btn-${p}`);
+                if (btn) btn.className = p === period 
+                    ? "px-3 py-1.5 text-xs font-bold rounded-md bg-sky-500/20 text-sky-400 shadow-sm border border-sky-500/50"
+                    : "px-3 py-1.5 text-xs font-medium rounded-md text-slate-400 hover:text-white hover:bg-slate-800";
+            });
+
+            weatherChart.data.labels = slice.map(d => d.date);
+            weatherChart.data.datasets = [
+                { type: 'bar', label: 'Rain (mm)', data: slice.map(d => d.rain), backgroundColor: 'rgba(56, 189, 248, 0.3)', yAxisID: 'y2', order: 3 },
+                {
+                    type: 'line', label: 'Wind Speed (m/s)', data: slice.map(d => d.wind),
+                    borderColor: (ctx) => {
+                        const t = slice[ctx.p0DataIndex]?.type;
+                        return t === 'historical' ? '#64748b' : (t === 'real' ? '#38bdf8' : '#475569');
+                    },
+                    segment: { borderDash: (ctx) => slice[ctx.p0DataIndex]?.type === 'projected' ? [5, 5] : undefined },
+                    borderWidth: 2, pointRadius: (ctx) => slice[ctx.dataIndex]?.type === 'real' ? 3 : 0,
+                    fill: false, tension: 0.4, yAxisID: 'y', order: 2
+                },
+                { type: 'line', label: 'Wave (m)', data: slice.map(d => d.wave), borderColor: '#818cf8', borderWidth: 2, borderDash: [2, 3], pointRadius: 0, tension: 0.4, yAxisID: 'y1', order: 1 }
+            ];
+            weatherChart.update();
+        }
+
+        // Initialize Everything
+        window.onload = () => {
+            // Init Tide
+            initTideMap();
+            
+            // Init Weather
+            initWeatherDropdown();
+            initWeatherMap();
+            initWeatherChart();
+            changeWeatherLocation();
+        };
 
     </script>
 </body>
