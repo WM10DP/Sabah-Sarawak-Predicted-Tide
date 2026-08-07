@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sabah Tide Stations Map</title>
+    
+    <!-- Tailwind CSS for UI styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <!-- Chart.js for Tide Graph -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #map { height: 100vh; width: 100vw; z-index: 1; }
+        
+        /* Custom map markers */
+        .primary-marker {
+            background-color: #ef4444; /* Tailwind red-500 */
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        .secondary-marker {
+            background-color: #3b82f6; /* Tailwind blue-500 */
+            border: 2px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 5px rgba(0,0,0,0.4);
+        }
+
+        /* Overlay UI positioning */
+        .ui-overlay {
+            position: absolute;
+            z-index: 1000;
+        }
+
+        /* Modal Z-index above Leaflet controls */
+        #graphModal {
+            z-index: 2000;
+        }
+    </style>
+</head>
+<body class="relative">
+
+    <!-- Map Container -->
+    <div id="map"></div>
+
+    <!-- Info Panel / Legend -->
+    <div class="ui-overlay top-4 left-4 sm:top-6 sm:left-6 bg-white/90 backdrop-blur-sm p-5 rounded-xl shadow-lg border border-gray-200 max-w-sm">
+        <h1 class="text-xl font-bold text-gray-800 mb-2">Sabah Tide Stations</h1>
+        <p class="text-sm text-gray-600 mb-4">Locations of official JUPEM tide gauges and key secondary predictive nodes for nearshore operations.</p>
+        
+        <div class="space-y-3">
+            <div class="flex items-center">
+                <div class="w-4 h-4 rounded-full bg-red-500 border-2 border-white shadow-sm mr-3"></div>
+                <span class="text-sm font-semibold text-gray-800">Primary Station (JUPEM)</span>
+            </div>
+            <div class="flex items-center">
+                <div class="w-3 h-3 rounded-full bg-blue-500 border-2 border-white shadow-sm mr-3 ml-0.5"></div>
+                <span class="text-sm text-gray-700">Secondary / Predictive Node</span>
+            </div>
+        </div>
+
+        <div class="mt-5 pt-4 border-t border-gray-200">
+            <p class="text-xs text-gray-500 italic mb-2">Click on any marker to view the station name and details. Coordinates are approximate for general reference.</p>
+            <p class="text-xs text-blue-600 font-semibold">Tide data is provided directly via the open-source Open-Meteo Marine API.</p>
+        </div>
+    </div>
+
+    <!-- Tide Graph Modal -->
+    <div id="graphModal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl p-5 relative flex flex-col h-[80vh] max-h-[600px]">
+            <!-- Close Button -->
+            <button onclick="closeModal()" class="absolute top-4 right-4 p-1 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            
+            <h2 id="modalTitle" class="text-xl font-bold text-gray-800 pr-8">7-Day Tide Forecast</h2>
+            <p class="text-sm text-gray-500 mb-4">Relative to Mean Sea Level (MSL)</p>
+            
+            <!-- Loading Indicator -->
+            <div id="loadingIndicator" class="flex-grow flex flex-col items-center justify-center text-gray-500">
+                <svg class="animate-spin h-8 w-8 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Fetching oceanographic data...</span>
+            </div>
+            
+            <!-- Chart Container -->
+            <div id="chartContainer" class="flex-grow relative hidden w-full h-full min-h-[300px]">
+                <canvas id="tideChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <script>
+        // Base Layers
+        const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 12,
+            minZoom: 5,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        });
+
+        const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 12,
+            minZoom: 5,
+            attribution: 'Tiles &copy; Esri'
+        });
+
+        // Initialize the map centered between Peninsular Malaysia and Sabah
+        const map = L.map('map', {
+            zoomControl: false, // Move zoom control to bottom right
+            layers: [osm] // Set default layer
+        }).setView([4.8000, 109.0000], 6);
+
+        L.control.zoom({
+            position: 'bottomright'
+        }).addTo(map);
+
+        // Add Layer Control (Map Type Selector)
+        const baseMaps = {
+            "OpenStreetMap": osm,
+            "Satellite (Esri)": satellite
+        };
+        L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
+
+        // Tide Station Data
+        const stations = [
+            // Primary JUPEM & Federal Stations
+            { name: "Kota Kinabalu", lat: 5.9804, lon: 116.0735, type: "Primary (JUPEM)", desc: "West Coast Reference Station" },
+            { name: "Kudat", lat: 6.8845, lon: 116.8488, type: "Primary (JUPEM)", desc: "Northern Tip Station" },
+            { name: "Sandakan", lat: 5.8394, lon: 118.1172, type: "Primary (JUPEM)", desc: "Northeast Coast Station" },
+            { name: "Lahad Datu", lat: 5.0270, lon: 118.3300, type: "Primary (JUPEM)", desc: "East Coast Station" },
+            { name: "Tawau", lat: 4.2445, lon: 117.8912, type: "Primary (JUPEM)", desc: "Southeast Coast Station" },
+            { name: "Labuan", lat: 5.2767, lon: 115.2444, type: "Primary (Federal)", desc: "Federal Territory / Offshore West" },
+            
+            // Secondary / Predictive Nodes
+            { name: "Pulau Banggi", lat: 7.2833, lon: 117.1833, type: "Secondary", desc: "Northern Island Node" },
+            { name: "Pulau Mangalum", lat: 6.2000, lon: 115.5833, type: "Secondary", desc: "Offshore West Node" },
+            { name: "Sipitang", lat: 5.0833, lon: 115.5500, type: "Secondary", desc: "Brunei Bay Node" },
+            { name: "Pulau Mantanani", lat: 6.7167, lon: 116.3333, type: "Secondary", desc: "Northwest Offshore Node" },
+            { name: "Labuk Bay", lat: 6.0000, lon: 117.6667, type: "Secondary", desc: "Northeast Coastal Node" },
+            { name: "Semporna", lat: 4.4833, lon: 118.6167, type: "Secondary", desc: "East Coast Gateway Node" },
+            
+            // Peninsular Malaysia Nodes
+            { name: "Pelabuhan Klang", lat: 3.0333, lon: 101.3667, type: "Primary (JUPEM)", desc: "West Coast Peninsular Reference Station" },
+            { name: "Kerteh (PETRONAS Penapisan)", lat: 4.5320, lon: 103.4460, type: "Secondary", desc: "Terengganu Offshore Node" }
+        ];
+
+        // Create custom icons using L.divIcon
+        const primaryIcon = L.divIcon({
+            className: 'primary-marker',
+            iconSize: [18, 18],
+            iconAnchor: [9, 9]
+        });
+
+        const secondaryIcon = L.divIcon({
+            className: 'secondary-marker',
+            iconSize: [12, 12],
+            iconAnchor: [6, 6]
+        });
+
+        // Add markers to the map
+        stations.forEach(station => {
+            const isPrimary = station.type.includes("Primary");
+            const marker = L.marker([station.lat, station.lon], {
+                icon: isPrimary ? primaryIcon : secondaryIcon
+            }).addTo(map);
+
+            const buttonColorClass = isPrimary ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600';
+
+            // Open-Meteo Marine API URL for direct CSV download
+            const csvDownloadUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${station.lat}&longitude=${station.lon}&hourly=sea_level_height_msl&timezone=Asia%2FSingapore&format=csv`;
+
+            // Setup popup content with new Graph Button
+            const popupContent = `
+                <div class="p-1 min-w-[190px]">
+                    <h3 class="font-bold text-lg mb-1">${station.name}</h3>
+                    <p class="text-sm font-semibold ${isPrimary ? 'text-red-600' : 'text-blue-600'} mb-1">${station.type}</p>
+                    <p class="text-xs text-gray-600 mb-2">${station.desc}</p>
+                    <div class="text-xs bg-gray-100 p-2 rounded border border-gray-200 mb-3">
+                        Lat: ${station.lat.toFixed(4)}°<br>
+                        Lon: ${station.lon.toFixed(4)}°
+                    </div>
+                    
+                    <button onclick="showTideGraph(${station.lat}, ${station.lon}, '${station.name}')" class="block w-full text-center ${buttonColorClass} text-white font-medium py-2 px-3 rounded shadow-sm transition-colors text-sm mb-2">
+                        📊 Show 7-Day Graph
+                    </button>
+                    
+                    <a href="${csvDownloadUrl}" target="_blank" rel="noopener noreferrer" class="block w-full text-center bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-700 font-medium py-1.5 px-3 rounded shadow-sm transition-colors text-xs" download>
+                        Download CSV
+                    </a>
+                </div>
+            `;
+            
+            marker.bindPopup(popupContent);
+        });
+
+        // --- GRAPH LOGIC ---
+        let tideChartInstance = null;
+
+        async function showTideGraph(lat, lon, stationName) {
+            const modal = document.getElementById('graphModal');
+            const title = document.getElementById('modalTitle');
+            const loading = document.getElementById('loadingIndicator');
+            const chartCont = document.getElementById('chartContainer');
+            
+            // Reset UI State
+            modal.classList.remove('hidden');
+            title.innerText = `7-Day Tide Forecast: ${stationName}`;
+            loading.classList.remove('hidden');
+            loading.innerHTML = `
+                <svg class="animate-spin h-8 w-8 text-blue-500 mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Fetching oceanographic data...</span>
+            `;
+            chartCont.classList.add('hidden');
+
+            try {
+                // Fetch JSON data for 7 days
+                const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=sea_level_height_msl&timezone=Asia%2FSingapore`;
+                const response = await fetch(url);
+                
+                if (!response.ok) throw new Error('Network response was not ok');
+                
+                const data = await response.json();
+                
+                // Format times for labels
+                const labels = data.hourly.time.map(t => {
+                    const d = new Date(t);
+                    return d.toLocaleDateString('en-GB', { weekday: 'short', hour: '2-digit', minute:'2-digit' });
+                });
+                
+                const heights = data.hourly.sea_level_height_msl;
+
+                // Hide loading, show canvas container
+                loading.classList.add('hidden');
+                chartCont.classList.remove('hidden');
+
+                const ctx = document.getElementById('tideChart').getContext('2d');
+                
+                // Destroy old chart if it exists
+                if (tideChartInstance) {
+                    tideChartInstance.destroy();
+                }
+
+                // Create new chart
+                tideChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Sea Level Height (m)',
+                            data: heights,
+                            borderColor: '#3b82f6', // Tailwind blue-500
+                            backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4, // Smooth curves
+                            pointRadius: 0, // Hide points unless hovered
+                            pointHitRadius: 10,
+                            pointHoverRadius: 5,
+                            pointHoverBackgroundColor: '#ef4444'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
+                        },
+                        plugins: {
+                            legend: {
+                                display: false // Hide legend to save space
+                            },
+                            tooltip: {
+                                backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                titleFont: { size: 13 },
+                                bodyFont: { size: 14, weight: 'bold' },
+                                callbacks: {
+                                    label: function(context) {
+                                        return `${context.parsed.y} meters (MSL)`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { display: false },
+                                ticks: {
+                                    maxTicksLimit: 7, // Show roughly 1 tick per day
+                                    maxRotation: 0
+                                }
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Height (meters)'
+                                },
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.05)'
+                                }
+                            }
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error("Error fetching tide data:", error);
+                loading.innerHTML = `
+                    <div class="text-red-500 text-center">
+                        <svg class="w-12 h-12 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <p class="font-bold">Failed to load data.</p>
+                        <p class="text-sm text-gray-500">Please check your connection and try again.</p>
+                    </div>
+                `;
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('graphModal').classList.add('hidden');
+        }
+
+        // Close modal when clicking outside the content area
+        document.getElementById('graphModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+
+    </script>
+</body>
+</html>
