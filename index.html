@@ -5,12 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ROVULA Marine Operations Console</title>
     
-    <!-- Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
-    <!-- Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
@@ -69,7 +67,6 @@
 </head>
 <body class="relative flex flex-col min-h-screen overflow-x-hidden">
 
-    <!-- Global App Header / Switcher -->
     <nav class="bg-slate-900 border-b border-slate-800 sticky top-0 z-[1500] h-[72px] flex items-center justify-between px-4 sm:px-6">
         <div class="flex items-center gap-3">
             <div class="bg-sky-600 text-white p-2 rounded-lg shadow-sm">
@@ -81,7 +78,6 @@
             </div>
         </div>
 
-        <!-- Toggle Switch -->
         <div class="flex bg-slate-800 p-1 rounded-xl shadow-inner border border-slate-700">
             <button onclick="switchTab('tide')" id="tab-tide" class="px-4 py-1.5 text-sm font-medium rounded-lg transition-all text-white bg-slate-700 shadow-sm">
                 <i class="fa-solid fa-water mr-1"></i> Tide Stations
@@ -101,14 +97,9 @@
         </div>
     </nav>
 
-    <!-- ============================================== -->
-    <!-- SECTION 1: TIDE STATIONS MAP                   -->
-    <!-- ============================================== -->
     <div id="section-tide" class="relative w-full">
-        <!-- Tide Map Container -->
         <div id="tideMap"></div>
 
-        <!-- Tide Info Panel -->
         <div class="ui-overlay top-4 left-4 sm:top-6 sm:left-6 bg-slate-800/95 backdrop-blur-md p-5 rounded-xl shadow-2xl border border-slate-700 max-w-sm">
             <h1 class="text-lg font-bold text-white mb-1">Regional Tide Stations</h1>
             <p class="text-xs text-slate-400 mb-4">Official JUPEM tide gauges and key secondary predictive nodes.</p>
@@ -128,7 +119,6 @@
             </div>
         </div>
 
-        <!-- Tide Graph Modal -->
         <div id="tideGraphModal" class="hidden fixed inset-0 bg-slate-900/80 flex items-center justify-center p-4 backdrop-blur-sm">
             <div class="bg-slate-800 rounded-xl shadow-2xl border border-slate-700 w-full max-w-4xl p-5 relative flex flex-col h-[80vh] max-h-[600px]">
                 <button onclick="closeTideModal()" class="absolute top-4 right-4 p-1 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">
@@ -151,14 +141,10 @@
     </div>
 
 
-    <!-- ============================================== -->
-    <!-- SECTION 2: WEATHER FORECASTING                 -->
-    <!-- ============================================== -->
     <div id="section-weather" class="hidden flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         
         <div id="api-status-msg" class="hidden mb-6 rounded-lg p-4 border border-red-500/50 bg-red-900/20 text-red-400 text-sm"></div>
 
-        <!-- Controls Section -->
         <div class="bg-slate-800 rounded-xl p-6 shadow-md border border-slate-700 mb-6">
             <div class="flex flex-col md:flex-row justify-between md:items-center gap-6">
                 <div>
@@ -182,12 +168,10 @@
             </div>
         </div>
 
-        <!-- Weather Map Section -->
         <div class="bg-slate-800 rounded-xl shadow-md border border-slate-700 p-1 mb-6 overflow-hidden">
             <div id="weatherMap" class="h-64 w-full rounded-lg bg-slate-900 z-0"></div>
         </div>
 
-        <!-- Metric Cards -->
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
             <div class="bg-slate-800 rounded-xl p-5 shadow-md border border-slate-700 border-b-4 border-b-cyan-500 card-hover transition-all">
                 <div class="flex justify-between items-start mb-3">
@@ -246,7 +230,6 @@
             </div>
         </div>
 
-        <!-- Chart Section -->
         <div class="bg-slate-800 rounded-xl shadow-md border border-slate-700 p-6 mb-8">
             <div class="flex flex-col lg:flex-row justify-between items-center mb-6 gap-4">
                 <div>
@@ -290,9 +273,6 @@
     </div>
 
 
-    <!-- ============================================== -->
-    <!-- GLOBAL JAVASCRIPT                              -->
-    <!-- ============================================== -->
     <script>
         // Set Chart.js global defaults for Dark Mode
         Chart.defaults.color = '#94a3b8'; // text-slate-400
@@ -330,7 +310,7 @@
 
 
         // ==============================================
-        // TIDE STATIONS LOGIC (Adapted from Source 2)
+        // TIDE STATIONS LOGIC
         // ==============================================
         let tideMap, tideChartInstance = null;
 
@@ -342,6 +322,10 @@
             { name: "Tawau", lat: 4.2445, lon: 117.8912, type: "Primary (JUPEM)", desc: "Southeast Coast Station" },
             { name: "Labuan", lat: 5.2767, lon: 115.2444, type: "Primary (Federal)", desc: "Offshore West" },
             { name: "Bintulu, Sarawak", lat: 3.2620, lon: 113.0640, type: "Primary (JUPEM)", desc: "Sarawak Coastal Ref" },
+            { name: "Kemaman", lat: 4.2250, lon: 103.4350, type: "Primary (JUPEM)", desc: "Terengganu South Reference Station" },
+            { name: "Terengganu (Kuala Terengganu)", lat: 5.3350, lon: 103.1420, type: "Primary (JUPEM)", desc: "East Coast Peninsular Station" },
+            { name: "Pelabuhan Klang", lat: 3.0333, lon: 101.3667, type: "Primary (JUPEM)", desc: "West Coast Peninsular Reference Station" },
+            { name: "Kerteh (PETRONAS)", lat: 4.5320, lon: 103.4460, type: "Secondary", desc: "Terengganu Offshore Node" },
             { name: "Pulau Banggi", lat: 7.2833, lon: 117.1833, type: "Secondary", desc: "Northern Island Node" },
             { name: "Semporna", lat: 4.4833, lon: 118.6167, type: "Secondary", desc: "East Coast Gateway" },
             { name: "Rayong", lat: 12.6700, lon: 101.2800, type: "Secondary", desc: "Eastern Gulf Coast Node" },
@@ -443,13 +427,15 @@
 
 
         // ==============================================
-        // WEATHER FORECAST LOGIC (Adapted from Source 3)
+        // WEATHER FORECAST LOGIC
         // ==============================================
         const API_KEY = "d53631302a4cfe2aadd0fbd727276c72";
         const WEATHER_LOCS = [
             { id: "east", name: "Eastern Thailand", lat: 12.67, lon: 101.27 },
             { id: "south_gulf", name: "Southern Gulf", lat: 9.14, lon: 99.88 }, 
             { id: "andaman", name: "Andaman Sea", lat: 7.88, lon: 98.39 },
+            { id: "terengganu", name: "Terengganu, Malaysia", lat: 5.3350, lon: 103.1420 },
+            { id: "kemaman", name: "Kemaman, Malaysia", lat: 4.2250, lon: 103.4350 },
             { id: "sabah", name: "Sabah, Malaysia", lat: 6.00, lon: 116.00 },
             { id: "sarawak", name: "Sarawak, Malaysia", lat: 3.20, lon: 113.00 }
         ];
