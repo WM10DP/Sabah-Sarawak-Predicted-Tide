@@ -158,7 +158,7 @@
                 <div class="w-full md:w-72">
                     <label class="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Select Region</label>
                     <div class="relative z-30">
-                        <select id="location-select" onchange="changeWeatherLocation()" class="appearance-none w-full bg-slate-900 border border-slate-700 text-slate-200 py-2.5 px-4 pr-8 rounded-lg leading-tight focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 cursor-pointer shadow-inner text-sm font-medium">
+                        <select id="location-select" onchange="changeWeatherLocation()" class="appearance-none w-full bg-slate-900 border border-slate-700 text-slate-200 py-2.5 px-4 pr-8 rounded-lg">
                         </select>
                         <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
                             <i class="fa-solid fa-chevron-down text-xs"></i>
@@ -242,7 +242,7 @@
                 </div>
                 
                 <div class="flex flex-col sm:flex-row gap-3 items-center w-full lg:w-auto">
-                    <button onclick="downloadCSV()" class="w-full sm:w-auto px-4 py-2 bg-emerald-600/20 border border-emerald-500/50 hover:bg-emerald-600/40 text-emerald-400 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2">
+                    <button onclick="downloadCSV()" class="w-full sm:w-auto px-4 py-2 bg-emerald-600/20 border border-emerald-500/50 hover:bg-emerald-600/40 text-emerald-400 text-xs font-bold rounded-lg">
                         <i class="fa-solid fa-file-csv"></i> Download CSV
                     </button>
                     <div class="bg-slate-900 p-1 rounded-lg inline-flex flex-wrap justify-center w-full sm:w-auto border border-slate-700">
@@ -264,9 +264,9 @@
                     <i class="fa-solid fa-code"></i> <span>Export Integration Code:</span>
                 </div>
                 <div class="flex gap-3">
-                    <button onclick="downloadCode('python')" class="px-3 py-2 bg-slate-900 border border-slate-700 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-colors"><i class="fa-brands fa-python text-sky-400 mr-1"></i> .py</button>
-                    <button onclick="downloadCode('r')" class="px-3 py-2 bg-slate-900 border border-slate-700 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-colors"><i class="fa-solid fa-r text-sky-500 mr-1"></i> .R</button>
-                    <button onclick="downloadCode('java')" class="px-3 py-2 bg-slate-900 border border-slate-700 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-colors"><i class="fa-brands fa-java text-red-400 mr-1"></i> .java</button>
+                    <button onclick="downloadCode('python')" class="px-3 py-2 bg-slate-900 border border-slate-700 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-colors">Python</button>
+                    <button onclick="downloadCode('r')" class="px-3 py-2 bg-slate-900 border border-slate-700 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-colors">R</button>
+                    <button onclick="downloadCode('java')" class="px-3 py-2 bg-slate-900 border border-slate-700 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-colors">Java</button>
                 </div>
             </div>
         </div>
@@ -278,8 +278,23 @@
         Chart.defaults.color = '#94a3b8'; // text-slate-400
         Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.05)';
 
-        const DARK_TILE_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-        const DARK_TILE_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>';
+        // Primary basemap choice (Carto dark). We'll provide a robust fallback to OpenStreetMap
+        const BASEMAPS = {
+            carto: {
+                url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                attr: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>'
+            },
+            osm: {
+                url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                attr: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }
+        };
+
+        // Helper to create a tile layer with CORS enabled and sensible defaults
+        function createTileLayer(providerKey, opts = {}) {
+            const p = BASEMAPS[providerKey];
+            return L.tileLayer(p.url, Object.assign({ attribution: p.attr, maxZoom: 18, minZoom: 3, crossOrigin: true }, opts));
+        }
 
         // === TAB SWITCHING LOGIC ===
         function switchTab(tabId) {
@@ -296,7 +311,7 @@
                 btnWeather.className = "px-4 py-1.5 text-sm font-medium rounded-lg transition-all text-slate-400 hover:text-white";
                 
                 // Fix Leaflet rendering bug when unhidden
-                setTimeout(() => { tideMap.invalidateSize(); }, 50);
+                setTimeout(() => { if (tideMap) tideMap.invalidateSize(); }, 100);
             } else {
                 tideSec.classList.add('hidden');
                 weatherSec.classList.remove('hidden');
@@ -304,7 +319,7 @@
                 btnWeather.className = "px-4 py-1.5 text-sm font-medium rounded-lg transition-all text-white bg-slate-700 shadow-sm";
                 btnTide.className = "px-4 py-1.5 text-sm font-medium rounded-lg transition-all text-slate-400 hover:text-white";
                 
-                setTimeout(() => { weatherMap.invalidateSize(); }, 50);
+                setTimeout(() => { if (weatherMap) weatherMap.invalidateSize(); }, 100);
             }
         }
 
@@ -336,9 +351,23 @@
         ];
 
         function initTideMap() {
-            const darkTiles = L.tileLayer(DARK_TILE_URL, { attribution: DARK_TILE_ATTR, maxZoom: 12, minZoom: 5 });
-            tideMap = L.map('tideMap', { zoomControl: false, layers: [darkTiles] }).setView([6.5, 108.0], 5);
+            // Start with Carto dark tiles; if multiple tile errors are observed, swap to OSM fallback
+            const cartoLayer = createTileLayer('carto', { maxZoom: 12, minZoom: 3 });
+            tideMap = L.map('tideMap', { zoomControl: false, layers: [cartoLayer] }).setView([6.5, 108.0], 5);
             L.control.zoom({ position: 'bottomright' }).addTo(tideMap);
+
+            // Handle tile errors and provide a fallback to OSM
+            let tileFailures = 0;
+            cartoLayer.on('tileerror', function() {
+                tileFailures += 1;
+                // If several tiles fail (likely provider blocked or unreachable), switch to OSM fallback
+                if (tileFailures > 6 && tideMap && tideMap.hasLayer(cartoLayer)) {
+                    const fallback = createTileLayer('osm');
+                    tideMap.addLayer(fallback);
+                    tideMap.removeLayer(cartoLayer);
+                    console.warn('Carto basemap failed repeatedly - switched to OSM fallback.');
+                }
+            });
 
             const primaryIcon = L.divIcon({ className: 'primary-marker', iconSize: [16, 16], iconAnchor: [8, 8] });
             const secondaryIcon = L.divIcon({ className: 'secondary-marker', iconSize: [12, 12], iconAnchor: [6, 6] });
@@ -358,8 +387,8 @@
                         <div class="text-xs bg-slate-900/50 p-2 rounded border border-slate-700 mb-3 text-slate-300">
                             Lat: ${station.lat.toFixed(4)}°<br>Lon: ${station.lon.toFixed(4)}°
                         </div>
-                        <button onclick="showTideGraph(${station.lat}, ${station.lon}, '${station.name}')" class="block w-full text-center ${btnColor} text-white font-medium py-2 px-3 rounded transition-colors text-sm mb-2">📊 Show 7-Day Graph</button>
-                        <a href="${csvUrl}" target="_blank" class="block w-full text-center bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-200 font-medium py-1.5 px-3 rounded transition-colors text-xs">Download CSV</a>
+                        <button onclick="showTideGraph(${station.lat}, ${station.lon}, '${station.name}')" class="block w-full text-center ${btnColor} text-white font-medium py-2 px-3 rounded transition-all mb-2">Show 7-day Graph</button>
+                        <a href="${csvUrl}" target="_blank" class="block w-full text-center bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-200 font-medium py-1.5 px-3 rounded">Download CSV</a>
                     </div>
                 `);
             });
@@ -449,8 +478,21 @@
         }
 
         function initWeatherMap() {
-            const darkTiles = L.tileLayer(DARK_TILE_URL, { attribution: DARK_TILE_ATTR, maxZoom: 18 });
-            weatherMap = L.map('weatherMap', { layers: [darkTiles] }).setView([weatherLoc.lat, weatherLoc.lon], 7);
+            // Use the same carto primary then fallback to OSM if needed
+            const cartoLayer = createTileLayer('carto');
+            weatherMap = L.map('weatherMap', { layers: [cartoLayer] }).setView([weatherLoc.lat, weatherLoc.lon], 7);
+
+            let tileFailures = 0;
+            cartoLayer.on('tileerror', function() {
+                tileFailures += 1;
+                if (tileFailures > 6 && weatherMap && weatherMap.hasLayer(cartoLayer)) {
+                    const fallback = createTileLayer('osm');
+                    weatherMap.addLayer(fallback);
+                    weatherMap.removeLayer(cartoLayer);
+                    console.warn('Carto basemap failed - switched to OSM fallback for weather map.');
+                }
+            });
+
             const icon = L.divIcon({ className: 'custom-div-icon', html: "<div style='background-color:#38bdf8; width:16px; height:16px; border-radius:50%; border:3px solid #0f172a;'></div>" });
             weatherMarker = L.marker([weatherLoc.lat, weatherLoc.lon], { icon }).addTo(weatherMap);
         }
@@ -515,7 +557,7 @@
             for (let i = totalDays; i >= 1; i--) {
                 const d = new Date(start); d.setDate(d.getDate() - i);
                 let w = Math.max(1, baseWind + (Math.random()-0.5)*3 + Math.sin(d.getMonth()/2)*2);
-                history.push({ date: d.toLocaleDateString('en-GB', {day:'numeric',month:'short'}), rawDate: d, wind: parseFloat(w.toFixed(2)), wave: parseFloat((0.025 * Math.pow(w, 1.5)).toFixed(2)), rain: Math.random()>0.6?Math.random()*8:0, type: 'historical' });
+                history.push({ date: d.toLocaleDateString('en-GB', {day:'numeric',month:'short'}), rawDate: d, wind: parseFloat(w.toFixed(2)), wave: parseFloat((0.025 * Math.pow(w, 1.5)).toFixed(2)), rain: 0, type: 'historical' });
             }
             return history;
         }
@@ -526,7 +568,7 @@
             for (let i = 1; i <= totalDays; i++) {
                 const d = new Date(start); d.setDate(d.getDate() + i);
                 let w = Math.max(1, lastW + (Math.random()-0.5)*3 + Math.sin(d.getMonth()/2)*2);
-                proj.push({ date: d.toLocaleDateString('en-GB', {day:'numeric',month:'short'}), rawDate: d, wind: parseFloat(w.toFixed(2)), wave: parseFloat((0.025 * Math.pow(w, 1.5)).toFixed(2)), rain: Math.random()>0.7?Math.random()*10:0, type: 'projected' });
+                proj.push({ date: d.toLocaleDateString('en-GB', {day:'numeric',month:'short'}), rawDate: d, wind: parseFloat(w.toFixed(2)), wave: parseFloat((0.025 * Math.pow(w, 1.5)).toFixed(2)), rain: 0, type: 'projected' });
                 lastW = w;
             }
             return proj;
