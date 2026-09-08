@@ -1,646 +1,717 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="th">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ROVULA Marine Operations Console</title>
-    
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>HydroTide Console — Real-Time Tide Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+:root{
+  --bg:#070d14; --panel:#0d1620; --panel2:#111e2b; --line:#1d3040;
+  --txt:#dfe9f2; --mut:#7d94a8; --acc:#00d2ff; --acc2:#00ffa6;
+  --warn:#ffb400; --bad:#ff4d6d; --past:#00ffa6;
+  --fut:#ffb400;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font:13px/1.5 "Segoe UI",Roboto,"Noto Sans Thai",sans-serif;overflow:hidden}
+#app{display:grid;grid-template-rows:52px 1fr;height:100vh}
 
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;700&display=swap');
-        body { 
-            font-family: 'Sarabun', sans-serif; 
-            background-color: #0f172a; /* Slate 900 */
-            color: #e2e8f0; /* Slate 200 */
-            margin: 0; padding: 0;
-        }
+header{display:flex;align-items:center;gap:16px;padding:0 16px;background:linear-gradient(90deg,#0a1420,#0d1c2b);
+  border-bottom:1px solid var(--line)}
+.logo{font-weight:700;letter-spacing:1px;font-size:15px}
+.logo span{color:var(--acc)}
+.tabs{display:flex;gap:4px;margin-left:12px}
+.tab{padding:6px 14px;border-radius:6px 6px 0 0;cursor:pointer;color:var(--mut);font-size:12px}
+.tab.on{background:var(--panel2);color:var(--acc);box-shadow:inset 0 -2px 0 var(--acc)}
+.clock{margin-left:auto;display:flex;gap:18px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+.clock b{color:var(--acc2);font-weight:600}
+.pill{padding:3px 10px;border-radius:20px;font-size:11px;border:1px solid var(--line);background:#0a1622}
+.pill.ok{border-color:#0a5;color:var(--acc2)}
+.pill.err{border-color:#a33;color:var(--bad)}
 
-        /* Hide scrollbar for cleaner UI but keep functionality */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #0f172a; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+#main{display:grid;grid-template-columns:290px 1fr 320px;overflow:hidden}
+.col{overflow-y:auto;background:var(--panel);border-right:1px solid var(--line)}
+.col:last-child{border-right:none;border-left:1px solid var(--line)}
+.sec{padding:12px;border-bottom:1px solid var(--line)}
+.sec h4{font-size:11px;letter-spacing:1.4px;color:var(--acc);text-transform:uppercase;margin-bottom:9px}
 
-        /* Custom Animations */
-        .loading-spinner {
-            border: 2px solid #334155; border-top: 2px solid #38bdf8; border-radius: 50%;
-            width: 14px; height: 14px; animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
-        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); }
-        .transition-all { transition-duration: 0.3s; }
+input,select,button,textarea{font-family:inherit;font-size:12px}
+input[type=text],input[type=number],select{width:100%;padding:7px 9px;background:#0a1420;border:1px solid var(--line);
+  border-radius:5px;color:var(--txt);outline:none}
+input:focus,select:focus{border-color:var(--acc)}
+label{display:block;font-size:11px;color:var(--mut);margin:7px 0 3px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button{padding:8px 10px;background:#12283a;border:1px solid var(--line);border-radius:5px;color:var(--txt);
+  cursor:pointer;width:100%;transition:.15s}
+button:hover{background:#1a3c56;border-color:var(--acc)}
+button.p{background:linear-gradient(90deg,#006e8a,#00a2c4);border-color:#00b4d8;font-weight:600}
+button.g{background:#0b4a34;border-color:#0a7} 
+.hint{font-size:10px;color:var(--mut);margin-top:5px;line-height:1.45}
 
-        /* Map and Z-Index Fixes */
-        .leaflet-pane { z-index: 10 !important; }
-        .leaflet-top, .leaflet-bottom { z-index: 20 !important; }
-        
-        /* Dark Theme Leaflet Overrides */
-        .leaflet-popup-content-wrapper, .leaflet-popup-tip {
-            background: #1e293b !important; /* Slate 800 */
-            color: #f1f5f9 !important;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5) !important;
-        }
-        .leaflet-container a.leaflet-popup-close-button {
-            color: #94a3b8 !important;
-        }
-        
-        /* Tide Map specific */
-        #tideMap { height: calc(100vh - 72px); width: 100vw; z-index: 1; }
-        .primary-marker {
-            background-color: #ef4444; border: 2px solid #1e293b; border-radius: 50%;
-            box-shadow: 0 0 10px rgba(239,68,68,0.5);
-        }
-        .secondary-marker {
-            background-color: #3b82f6; border: 2px solid #1e293b; border-radius: 50%;
-            box-shadow: 0 0 5px rgba(59,130,246,0.5);
-        }
-        .ui-overlay { position: absolute; z-index: 1000; }
-        #tideGraphModal { z-index: 2000; }
-    </style>
+#stlist{max-height:320px;overflow-y:auto}
+.st{padding:7px 9px;border-radius:5px;cursor:pointer;display:flex;align-items:center;gap:8px;border:1px solid transparent}
+.st:hover{background:#12222f}
+.st.on{background:#0d3d52;border-color:var(--acc)}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.dot.P{background:var(--acc2);box-shadow:0 0 8px var(--acc2)}
+.dot.S{background:var(--warn)}
+.st small{color:var(--mut);font-size:10px;display:block}
+.grp{font-size:10px;color:var(--mut);margin:9px 0 4px;letter-spacing:1px}
+
+#center{display:grid;grid-template-rows:38% 1fr;overflow:hidden}
+#tideMap{width:100%;height:100%;background:#e5e3df}
+#chartWrap{padding:10px 14px;display:flex;flex-direction:column;overflow:hidden;background:var(--panel2)}
+#chartHead{display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap}
+#chartHead h3{font-size:14px}
+.chip{font-size:10px;padding:2px 8px;border-radius:12px;background:#0a1e2c;border:1px solid var(--line);color:var(--mut)}
+#cv{flex:1;min-height:0}
+
+.kpi{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.k{background:#0a1725;border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+.k small{display:block;color:var(--mut);font-size:10px;letter-spacing:.5px}
+.k b{font-size:17px;font-family:ui-monospace,Consolas,monospace;color:var(--acc)}
+.k.g b{color:var(--acc2)} .k.w b{color:var(--warn)}
+
+table{width:100%;border-collapse:collapse;font-size:11px;font-family:ui-monospace,Consolas,monospace}
+th{background:#0a1725;color:var(--mut);padding:5px;text-align:left;font-weight:500;position:sticky;top:0}
+td{padding:4px 5px;border-bottom:1px solid #142434}
+tr.HW td{color:var(--acc2)} tr.LW td{color:var(--warn)}
+.scroll{max-height:230px;overflow-y:auto;border:1px solid var(--line);border-radius:5px}
+
+.leaflet-popup-content-wrapper{background:#0d1c2b;color:var(--txt);border:1px solid var(--acc);border-radius:6px}
+.leaflet-popup-tip{background:#0d1c2b}
+.pop b{color:var(--acc)} .pop{font-size:11px;line-height:1.7}
+::-webkit-scrollbar{width:7px;height:7px}
+::-webkit-scrollbar-thumb{background:#1d3040;border-radius:4px}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#0d3d52;border:1px solid var(--acc);
+  padding:9px 18px;border-radius:6px;font-size:12px;opacity:0;transition:.3s;pointer-events:none;z-index:9999}
+#toast.on{opacity:1}
+.hidden{display:none!important}
+</style>
 </head>
-<body class="relative flex flex-col min-h-screen overflow-x-hidden">
+<body>
+<div id="app">
+<header>
+  <div class="logo">HYDRO<span>TIDE</span> CONSOLE</div>
+  <div class="tabs">
+    <div class="tab on" data-v="tide">Tide Stations</div>
+    <div class="tab" data-v="ops">Ops / Metocean</div>
+  </div>
+  <div class="clock">
+    <div>UTC <b id="cUtc">--:--:--</b></div>
+    <div>LOCAL <b id="cLoc">--:--:--</b></div>
+    <span class="pill" id="status">INIT</span>
+    <span class="pill" id="refresh">next ↻ --:--</span>
+  </div>
+</header>
 
-    <nav class="bg-slate-900 border-b border-slate-800 sticky top-0 z-[1500] h-[72px] flex items-center justify-between px-4 sm:px-6">
-        <div class="flex items-center gap-3">
-            <div class="bg-sky-600 text-white p-2 rounded-lg shadow-sm">
-                <i class="fa-solid fa-anchor text-lg"></i>
-            </div>
-            <div class="hidden sm:block">
-                <h1 class="text-sm font-bold text-white leading-tight">ROVULA</h1>
-                <div class="text-[10px] text-slate-400">Marine Operations</div>
-            </div>
-        </div>
-
-        <div class="flex bg-slate-800 p-1 rounded-xl shadow-inner border border-slate-700">
-            <button onclick="switchTab('tide')" id="tab-tide" class="px-4 py-1.5 text-sm font-medium rounded-lg transition-all text-white bg-slate-700 shadow-sm">
-                <i class="fa-solid fa-water mr-1"></i> Tide Stations
-            </button>
-            <button onclick="switchTab('weather')" id="tab-weather" class="px-4 py-1.5 text-sm font-medium rounded-lg transition-all text-slate-400 hover:text-white">
-                <i class="fa-solid fa-cloud-sun mr-1"></i> Weather Forecast
-            </button>
-        </div>
-
-        <div class="text-xs text-slate-500 hidden sm:flex gap-4">
-            <span id="weather-api-status" class="flex items-center gap-2 hidden">
-                <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> OpenWeather API
-            </span>
-            <span class="flex items-center gap-2">
-                <div class="w-2 h-2 rounded-full bg-sky-500"></div> Open-Meteo API
-            </span>
-        </div>
-    </nav>
-
-    <div id="section-tide" class="relative w-full">
-        <div id="tideMap"></div>
-
-        <div class="ui-overlay top-4 left-4 sm:top-6 sm:left-6 bg-slate-800/95 backdrop-blur-md p-5 rounded-xl shadow-2xl border border-slate-700 max-w-sm">
-            <h1 class="text-lg font-bold text-white mb-1">Regional Tide Stations</h1>
-            <p class="text-xs text-slate-400 mb-4">Official JUPEM tide gauges and key secondary predictive nodes.</p>
-            
-            <div class="space-y-3">
-                <div class="flex items-center">
-                    <div class="w-4 h-4 rounded-full bg-red-500 border-2 border-slate-800 shadow-sm mr-3"></div>
-                    <span class="text-sm font-medium text-slate-200">Primary Station (JUPEM)</span>
-                </div>
-                <div class="flex items-center">
-                    <div class="w-3 h-3 rounded-full bg-blue-500 border-2 border-slate-800 shadow-sm mr-3 ml-0.5"></div>
-                    <span class="text-sm text-slate-300">Secondary / Predictive Node</span>
-                </div>
-            </div>
-            <div class="mt-5 pt-4 border-t border-slate-700">
-                <p class="text-xs text-slate-500 italic">Click markers for details & 7-day MSL graphs.</p>
-            </div>
-        </div>
-
-        <div id="tideGraphModal" class="hidden fixed inset-0 bg-slate-900/80 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div class="bg-slate-800 rounded-xl shadow-2xl border border-slate-700 w-full max-w-4xl p-5 relative flex flex-col h-[80vh] max-h-[600px]">
-                <button onclick="closeTideModal()" class="absolute top-4 right-4 p-1 rounded-full text-slate-400 hover:bg-slate-700 hover:text-white transition-colors">
-                    <i class="fa-solid fa-xmark text-xl"></i>
-                </button>
-                
-                <h2 id="tideModalTitle" class="text-xl font-bold text-white pr-8">7-Day Tide Forecast</h2>
-                <p class="text-sm text-slate-400 mb-4">Relative to Mean Sea Level (MSL)</p>
-                
-                <div id="tideLoadingIndicator" class="flex-grow flex flex-col items-center justify-center text-slate-400">
-                    <div class="loading-spinner mb-3 h-8 w-8 !border-4 !border-slate-700 !border-t-sky-500"></div>
-                    <span>Fetching oceanographic data...</span>
-                </div>
-                
-                <div id="tideChartContainer" class="flex-grow relative hidden w-full h-full min-h-[300px]">
-                    <canvas id="tideChart"></canvas>
-                </div>
-            </div>
-        </div>
+<div id="main">
+  <div class="col">
+    <div class="sec">
+      <h4>Station Selector</h4>
+      <input type="text" id="search" placeholder="Search station / port...">
+      <div id="stlist"></div>
     </div>
 
-
-    <div id="section-weather" class="hidden flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
-        
-        <div id="api-status-msg" class="hidden mb-6 rounded-lg p-4 border border-red-500/50 bg-red-900/20 text-red-400 text-sm"></div>
-
-        <div class="bg-slate-800 rounded-xl p-6 shadow-md border border-slate-700 mb-6">
-            <div class="flex flex-col md:flex-row justify-between md:items-center gap-6">
-                <div>
-                    <h2 class="text-2xl font-bold text-white" id="location-title">Loading...</h2>
-                    <p class="text-sky-400 text-sm mt-1 flex items-center gap-2">
-                        <i class="fa-solid fa-location-dot"></i>
-                        <span id="location-coords">Waiting for selection...</span>
-                    </p>
-                </div>
-                
-                <div class="w-full md:w-72">
-                    <label class="block text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wider">Select Region</label>
-                    <div class="relative z-30">
-                        <select id="location-select" onchange="changeWeatherLocation()" class="appearance-none w-full bg-slate-900 border border-slate-700 text-slate-200 py-2.5 px-4 pr-8 rounded-lg">
-                        </select>
-                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-slate-400">
-                            <i class="fa-solid fa-chevron-down text-xs"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="bg-slate-800 rounded-xl shadow-md border border-slate-700 p-1 mb-6 overflow-hidden">
-            <div id="weatherMap" class="h-64 w-full rounded-lg bg-slate-900 z-0"></div>
-        </div>
-
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
-            <div class="bg-slate-800 rounded-xl p-5 shadow-md border border-slate-700 border-b-4 border-b-cyan-500 card-hover transition-all">
-                <div class="flex justify-between items-start mb-3">
-                    <div>
-                        <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Wind Speed</p>
-                        <div class="flex items-baseline gap-1 mt-1">
-                            <span id="current-wind" class="text-3xl font-bold text-white">--</span>
-                            <span class="text-sm text-slate-500">m/s</span>
-                        </div>
-                    </div>
-                    <div class="bg-cyan-900/40 p-2 rounded-full text-cyan-400"><i class="fa-solid fa-wind text-lg"></i></div>
-                </div>
-                <p id="wind-desc" class="text-xs text-slate-400 flex items-center gap-1 truncate"><i class="fa-regular fa-compass"></i> --</p>
-            </div>
-
-            <div class="bg-slate-800 rounded-xl p-5 shadow-md border border-slate-700 border-b-4 border-b-indigo-500 card-hover transition-all">
-                <div class="flex justify-between items-start mb-3">
-                    <div>
-                        <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Est. Wave Height</p>
-                        <div class="flex items-baseline gap-1 mt-1">
-                            <span id="current-wave" class="text-3xl font-bold text-white">--</span>
-                            <span class="text-sm text-slate-500">m</span>
-                        </div>
-                    </div>
-                    <div class="bg-indigo-900/40 p-2 rounded-full text-indigo-400"><i class="fa-solid fa-water text-lg"></i></div>
-                </div>
-                <p class="text-xs text-slate-400 truncate">Wind-Wave Model</p>
-            </div>
-
-             <div class="bg-slate-800 rounded-xl p-5 shadow-md border border-slate-700 border-b-4 border-b-blue-400 card-hover transition-all">
-                <div class="flex justify-between items-start mb-3">
-                    <div>
-                        <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Precipitation (1h)</p>
-                        <div class="flex items-baseline gap-1 mt-1">
-                            <span id="current-rain" class="text-3xl font-bold text-white">--</span>
-                            <span class="text-sm text-slate-500">mm</span>
-                        </div>
-                    </div>
-                    <div class="bg-blue-900/40 p-2 rounded-full text-blue-400"><i class="fa-solid fa-cloud-showers-heavy text-lg"></i></div>
-                </div>
-                <p class="text-xs text-slate-400 truncate">Volume</p>
-            </div>
-
-            <div class="bg-slate-800 rounded-xl p-5 shadow-md border border-slate-700 border-b-4 border-b-orange-400 card-hover transition-all">
-                <div class="flex justify-between items-start mb-3">
-                    <div>
-                        <p class="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Condition</p>
-                        <div class="flex items-baseline gap-1 mt-1">
-                            <span id="current-temp" class="text-3xl font-bold text-white">--</span>
-                            <span class="text-sm text-slate-500">°C</span>
-                        </div>
-                    </div>
-                    <div class="bg-orange-900/40 p-2 rounded-full text-orange-400"><i class="fa-solid fa-cloud-sun text-lg"></i></div>
-                </div>
-                <p id="weather-condition" class="text-xs text-slate-400 capitalize truncate">--</p>
-            </div>
-        </div>
-
-        <div class="bg-slate-800 rounded-xl shadow-md border border-slate-700 p-6 mb-8">
-            <div class="flex flex-col lg:flex-row justify-between items-center mb-6 gap-4">
-                <div>
-                    <h3 class="text-lg font-bold text-white">Forecast & Historical Analysis</h3>
-                    <div class="flex flex-wrap items-center gap-3 text-xs mt-2 text-slate-400">
-                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-slate-500 rounded-sm"></span> History</span>
-                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 bg-cyan-400 rounded-sm"></span> Real</span>
-                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 border border-slate-500 border-dashed rounded-sm"></span> Projection</span>
-                    </div>
-                </div>
-                
-                <div class="flex flex-col sm:flex-row gap-3 items-center w-full lg:w-auto">
-                    <button onclick="downloadCSV()" class="w-full sm:w-auto px-4 py-2 bg-emerald-600/20 border border-emerald-500/50 hover:bg-emerald-600/40 text-emerald-400 text-xs font-bold rounded-lg">
-                        <i class="fa-solid fa-file-csv"></i> Download CSV
-                    </button>
-                    <div class="bg-slate-900 p-1 rounded-lg inline-flex flex-wrap justify-center w-full sm:w-auto border border-slate-700">
-                        <button onclick="updateTimeframe('past-year')" id="btn-past-year" class="px-3 py-1.5 text-xs font-semibold rounded-md transition-all text-slate-400 hover:text-white">Past 1Y</button>
-                        <button onclick="updateTimeframe('future-month')" id="btn-future-month" class="px-3 py-1.5 text-xs font-semibold rounded-md transition-all text-slate-400 hover:text-white">Next 1M</button>
-                        <button onclick="updateTimeframe('future-quarter')" id="btn-future-quarter" class="px-3 py-1.5 text-xs font-semibold rounded-md transition-all text-slate-400 hover:text-white">Next 3M</button>
-                        <button onclick="updateTimeframe('future-year')" id="btn-future-year" class="px-3 py-1.5 text-xs font-semibold rounded-md transition-all text-slate-400 hover:text-white">Next 1Y</button>
-                    </div>
-                </div>
-            </div>
-            <div class="relative h-[400px] w-full">
-                <canvas id="weatherChart"></canvas>
-            </div>
-        </div>
-
-        <div class="border-t border-slate-700 pt-6">
-            <div class="flex flex-col md:flex-row items-center justify-between gap-4">
-                <div class="flex items-center gap-2 text-slate-400 text-sm">
-                    <i class="fa-solid fa-code"></i> <span>Export Integration Code:</span>
-                </div>
-                <div class="flex gap-3">
-                    <button onclick="downloadCode('python')" class="px-3 py-2 bg-slate-900 border border-slate-700 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-colors">Python</button>
-                    <button onclick="downloadCode('r')" class="px-3 py-2 bg-slate-900 border border-slate-700 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-colors">R</button>
-                    <button onclick="downloadCode('java')" class="px-3 py-2 bg-slate-900 border border-slate-700 hover:bg-slate-700 text-slate-300 text-xs font-bold rounded-lg transition-colors">Java</button>
-                </div>
-            </div>
-        </div>
+    <div class="sec">
+      <h4>Vertical Datum</h4>
+      <label>Reference datum</label>
+      <select id="datum">
+        <option value="MSL">MSL (as observed/modeled)</option>
+        <option value="CD">Chart Datum / LAT (apply Z₀)</option>
+        <option value="ELL">Ellipsoidal (apply N + Z₀)</option>
+      </select>
+      <div class="row">
+        <div><label>Z₀ : MSL→CD (m)</label><input type="number" id="z0" step="0.001" value="0.000"></div>
+        <div><label>N sep. (m)</label><input type="number" id="nsep" step="0.001" value="0.000"></div>
+      </div>
+      <button id="autoZ0" style="margin-top:8px">⚙ Auto-estimate Z₀ (LAT≈min−σ)</button>
+      <div class="hint">⚠ Estimated from rolling 14-day window. For hydrographic processing, always use official benchmark Z₀ from JUPEM or TH Hydro Dept.</div>
     </div>
 
+    <div class="sec">
+      <h4>Resampling</h4>
+      <label>Output interval</label>
+      <select id="interval">
+        <option value="60">60 min (native model)</option>
+        <option value="30">30 min</option>
+        <option value="15" selected>15 min</option>
+        <option value="10">10 min</option>
+        <option value="6">6 min</option>
+        <option value="1">1 min (dense — tide reduction)</option>
+      </select>
+      <label>Interpolator</label>
+      <select id="interp">
+        <option value="pchip" selected>PCHIP monotone cubic</option>
+        <option value="catmull">Catmull-Rom spline</option>
+        <option value="linear">Linear</option>
+      </select>
+      <label>Time reference (export)</label>
+      <select id="tzout">
+        <option value="utc" selected>UTC</option>
+        <option value="local">Station local time</option>
+      </select>
+    </div>
 
-    <script>
-        // Set Chart.js global defaults for Dark Mode
-        Chart.defaults.color = '#94a3b8'; // text-slate-400
-        Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.05)';
+    <div class="sec">
+      <h4>Observed Gauge (CSV Override)</h4>
+      <button id="impBtn">📂 Import custom CSV</button>
+      <input type="file" id="impFile" accept=".csv,.txt" class="hidden">
+      <div class="hint">Format: <code>datetime,level</code>. Replaces the auto-fetched Real Data for accurate post-processing.</div>
+      <div id="resBox" class="hidden" style="margin-top:8px">
+        <div class="k"><small>RESIDUAL RMS (Real vs Forecast)</small><b id="rms">--</b></div>
+      </div>
+    </div>
+  </div>
 
-        // Primary basemap choice (Carto dark). We'll provide a robust fallback to OpenStreetMap
-        const BASEMAPS = {
-            carto: {
-                url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-                attr: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>'
-            },
-            osm: {
-                url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                attr: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            }
-        };
+  <div id="center">
+    <div id="tideMap"></div>
+    <div id="chartWrap">
+      <div id="chartHead">
+        <h3 id="chTitle">— select a station —</h3>
+        <span class="chip" id="chDatum">datum: MSL</span>
+        <span class="chip" id="chSpan">−7 d (Real) … +7 d (Forecast)</span>
+        <span class="chip" id="chN">0 pts</span>
+        <span class="chip" style="color:var(--past);border-color:var(--past)">■ Observed (Real)</span>
+        <span class="chip" style="color:var(--fut);border-color:var(--fut)">■ Forecast (Predicted)</span>
+      </div>
+      <div id="cv"><canvas id="tideChart"></canvas></div>
+    </div>
+  </div>
 
-        // Helper to create a tile layer with CORS enabled and sensible defaults
-        function createTileLayer(providerKey, opts = {}) {
-            const p = BASEMAPS[providerKey];
-            return L.tileLayer(p.url, Object.assign({ attribution: p.attr, maxZoom: 18, minZoom: 3, crossOrigin: true }, opts));
-        }
+  <div class="col">
+    <div class="sec">
+      <h4>Live Readout (Observed)</h4>
+      <div class="kpi">
+        <div class="k g"><small>NOW (m)</small><b id="kNow">--</b></div>
+        <div class="k"><small>TREND</small><b id="kTrend">--</b></div>
+        <div class="k"><small>NEXT HW</small><b id="kHW">--</b></div>
+        <div class="k w"><small>NEXT LW</small><b id="kLW">--</b></div>
+        <div class="k"><small>RANGE 14d</small><b id="kRange">--</b></div>
+        <div class="k"><small>FORM FACTOR</small><b id="kF">--</b></div>
+      </div>
+      <div class="hint" id="fType"></div>
+    </div>
 
-        // === TAB SWITCHING LOGIC ===
-        function switchTab(tabId) {
-            const tideSec = document.getElementById('section-tide');
-            const weatherSec = document.getElementById('section-weather');
-            const btnTide = document.getElementById('tab-tide');
-            const btnWeather = document.getElementById('tab-weather');
+    <div class="sec">
+      <h4>Predicted Extremes</h4>
+      <div class="scroll"><table id="extTbl">
+        <thead><tr><th>Date/Time</th><th>Type</th><th>h (m)</th></tr></thead><tbody></tbody>
+      </table></div>
+    </div>
 
-            if (tabId === 'tide') {
-                tideSec.classList.remove('hidden');
-                weatherSec.classList.add('hidden');
-                
-                btnTide.className = "px-4 py-1.5 text-sm font-medium rounded-lg transition-all text-white bg-slate-700 shadow-sm";
-                btnWeather.className = "px-4 py-1.5 text-sm font-medium rounded-lg transition-all text-slate-400 hover:text-white";
-                
-                // Fix Leaflet rendering bug when unhidden
-                setTimeout(() => { if (tideMap) tideMap.invalidateSize(); }, 100);
-            } else {
-                tideSec.classList.add('hidden');
-                weatherSec.classList.remove('hidden');
-                
-                btnWeather.className = "px-4 py-1.5 text-sm font-medium rounded-lg transition-all text-white bg-slate-700 shadow-sm";
-                btnTide.className = "px-4 py-1.5 text-sm font-medium rounded-lg transition-all text-slate-400 hover:text-white";
-                
-                setTimeout(() => { if (weatherMap) weatherMap.invalidateSize(); }, 100);
-            }
-        }
+    <div class="sec">
+      <h4>Export → Survey Software</h4>
+      <label>Format</label>
+      <select id="fmt">
+        <option value="csv">Generic CSV (full record + metadata)</option>
+        <option value="caris_doy">CARIS HIPS/SIPS .tid — YYYY/DDD</option>
+        <option value="caris_cal">CARIS HIPS/SIPS .tid — YYYY/MM/DD</option>
+        <option value="hypack">HYPACK .tid</option>
+        <option value="qinsy">QPS QINSy tide (.txt)</option>
+        <option value="pds">Teledyne PDS (.tid)</option>
+        <option value="qgis">QGIS/Excel — decimal + ISO8601</option>
+      </select>
+      <div class="row" style="margin-top:8px">
+        <button class="p" id="dl">⬇ Download</button>
+        <button class="g" id="dlAll">⬇ All stations</button>
+      </div>
+      <button id="dlOps" style="margin-top:8px">⬇ Metocean CSV (wave/current/wind)</button>
+      <div class="hint">Includes 'O' (Observed) or 'F' (Forecast) flags in the output metadata.</div>
+    </div>
 
+    <div class="sec">
+      <h4>Data Preview</h4>
+      <div class="scroll"><table id="prevTbl">
+        <thead><tr><th>UTC</th><th>h(m)</th><th>Type</th></tr></thead><tbody></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+</div>
+<div id="toast"></div>
 
-        // ==============================================
-        // TIDE STATIONS LOGIC
-        // ==============================================
-        let tideMap, tideChartInstance = null;
+<script>
+const STATIONS = [
+ {id:'KKI',n:'Kota Kinabalu',c:'MY',r:'Sabah',lat:5.9804,lon:116.0735,t:'P',tz:8},
+ {id:'KDT',n:'Kudat',        c:'MY',r:'Sabah',lat:6.8833,lon:116.8333,t:'P',tz:8},
+ {id:'SDK',n:'Sandakan',     c:'MY',r:'Sabah',lat:5.8402,lon:118.1179,t:'P',tz:8},
+ {id:'LDU',n:'Lahad Datu',   c:'MY',r:'Sabah',lat:5.0290,lon:118.3390,t:'S',tz:8},
+ {id:'TWU',n:'Tawau',        c:'MY',r:'Sabah',lat:4.2400,lon:117.8900,t:'P',tz:8},
+ {id:'SMP',n:'Semporna',     c:'MY',r:'Sabah',lat:4.4800,lon:118.6100,t:'S',tz:8},
+ {id:'PBG',n:'Pulau Banggi', c:'MY',r:'Sabah',lat:7.2833,lon:117.1333,t:'S',tz:8},
+ {id:'LBU',n:'Labuan',       c:'MY',r:'Labuan',lat:5.2831,lon:115.2308,t:'P',tz:8},
+ {id:'BTU',n:'Bintulu',      c:'MY',r:'Sarawak',lat:3.2670,lon:113.0600,t:'P',tz:8},
+ {id:'MYY',n:'Miri',         c:'MY',r:'Sarawak',lat:4.4000,lon:113.9800,t:'S',tz:8},
+ {id:'KCH',n:'Kuching (Pending)',c:'MY',r:'Sarawak',lat:1.5600,lon:110.3400,t:'S',tz:8},
+ {id:'KBE',n:'Kuala Besut',  c:'MY',r:'Terengganu',lat:5.8333,lon:102.5500,t:'S',tz:8},
+ {id:'KTR',n:'Kuala Terengganu',c:'MY',r:'Terengganu',lat:5.3300,lon:103.1400,t:'P',tz:8},
+ {id:'DGN',n:'Dungun',       c:'MY',r:'Terengganu',lat:4.7740,lon:103.4250,t:'S',tz:8},
+ {id:'KTH',n:'Kerteh',       c:'MY',r:'Terengganu',lat:4.5100,lon:103.4500,t:'S',tz:8},
+ {id:'KMN',n:'Kemaman',      c:'MY',r:'Terengganu',lat:4.2333,lon:103.4500,t:'P',tz:8},
+ {id:'PKG',n:'Pelabuhan Klang',c:'MY',r:'Selangor',lat:3.0000,lon:101.3600,t:'P',tz:8},
+ {id:'PEN',n:'Pulau Pinang', c:'MY',r:'Penang',lat:5.4200,lon:100.3450,t:'P',tz:8},
+ {id:'JHB',n:'Johor Bahru',  c:'MY',r:'Johor',lat:1.4600,lon:103.7900,t:'S',tz:8},
+ {id:'LCB',n:'Laem Chabang', c:'TH',r:'Chonburi',lat:13.0800,lon:100.8830,t:'P',tz:7},
+ {id:'SCH',n:'Ko Sichang (Chon Buri)',c:'TH',r:'Chonburi',lat:13.1500,lon:100.8000,t:'P',tz:7},
+ {id:'SRC',n:'Si Racha',     c:'TH',r:'Chonburi',lat:13.1600,lon:100.9200,t:'S',tz:7},
+ {id:'STP',n:'Sattahip',     c:'TH',r:'Chonburi',lat:12.6300,lon:100.9000,t:'P',tz:7},
+ {id:'MTP',n:'Map Ta Phut',  c:'TH',r:'Rayong',lat:12.6670,lon:101.1500,t:'P',tz:7},
+ {id:'RYG',n:'Rayong',       c:'TH',r:'Rayong',lat:12.6500,lon:101.2800,t:'S',tz:7},
+ {id:'SKA',n:'Songkhla',     c:'TH',r:'Songkhla',lat:7.2000,lon:100.5900,t:'P',tz:7},
+ {id:'HKT',n:'Phuket (Ao Makham)',c:'TH',r:'Phuket',lat:7.8300,lon:98.4300,t:'P',tz:7},
+];
 
-        const tideStations = [
-            { name: "Kota Kinabalu", lat: 5.9804, lon: 116.0735, type: "Primary (JUPEM)", desc: "West Coast Reference" },
-            { name: "Kudat", lat: 6.8845, lon: 116.8488, type: "Primary (JUPEM)", desc: "Northern Tip Station" },
-            { name: "Sandakan", lat: 5.8394, lon: 118.1172, type: "Primary (JUPEM)", desc: "Northeast Coast Station" },
-            { name: "Lahad Datu", lat: 5.0270, lon: 118.3300, type: "Primary (JUPEM)", desc: "East Coast Station" },
-            { name: "Tawau", lat: 4.2445, lon: 117.8912, type: "Primary (JUPEM)", desc: "Southeast Coast Station" },
-            { name: "Labuan", lat: 5.2767, lon: 115.2444, type: "Primary (Federal)", desc: "Offshore West" },
-            { name: "Bintulu, Sarawak", lat: 3.2620, lon: 113.0640, type: "Primary (JUPEM)", desc: "Sarawak Coastal Ref" },
-            { name: "Kemaman", lat: 4.2250, lon: 103.4350, type: "Primary (JUPEM)", desc: "Terengganu South Reference Station" },
-            { name: "Terengganu (Kuala Terengganu)", lat: 5.3350, lon: 103.1420, type: "Primary (JUPEM)", desc: "East Coast Peninsular Station" },
-            { name: "Pelabuhan Klang", lat: 3.0333, lon: 101.3667, type: "Primary (JUPEM)", desc: "West Coast Peninsular Reference Station" },
-            { name: "Kerteh (PETRONAS)", lat: 4.5320, lon: 103.4460, type: "Secondary", desc: "Terengganu Offshore Node" },
-            { name: "Pulau Banggi", lat: 7.2833, lon: 117.1833, type: "Secondary", desc: "Northern Island Node" },
-            { name: "Semporna", lat: 4.4833, lon: 118.6167, type: "Secondary", desc: "East Coast Gateway" },
-            { name: "Rayong", lat: 12.6700, lon: 101.2800, type: "Secondary", desc: "Eastern Gulf Coast Node" },
-            { name: "แหลมฉบัง (Laem Chabang)", lat: 13.0800, lon: 100.8800, type: "Secondary", desc: "Deep Sea Port" },
-            { name: "Chon Buri", lat: 13.3600, lon: 100.9800, type: "Secondary", desc: "Upper Eastern Gulf" },
-            { name: "มาบตาพุด (Map Ta Phut)", lat: 12.6667, lon: 101.1500, type: "Secondary", desc: "Industrial Port" },
-            { name: "สงขลา (Songkhla)", lat: 7.2000, lon: 100.5900, type: "Secondary", desc: "Lower Gulf Coast" }
-        ];
+const MARINE='https://marine-api.open-meteo.com/v1/marine';
+const FCAST ='https://api.open-meteo.com/v1/forecast';
+const MVARS='sea_level_height_msl,wave_height,wave_period,wave_direction,ocean_current_velocity,ocean_current_direction,sea_surface_temperature';
 
-        function initTideMap() {
-            // Start with Carto dark tiles; if multiple tile errors are observed, swap to OSM fallback
-            const cartoLayer = createTileLayer('carto', { maxZoom: 12, minZoom: 3 });
-            tideMap = L.map('tideMap', { zoomControl: false, layers: [cartoLayer] }).setView([6.5, 108.0], 5);
-            L.control.zoom({ position: 'bottomright' }).addTo(tideMap);
+let map, chart, markers={}, cur=null, cache={}, customObs=null, timerId=null, nextRef=0;
 
-            // Handle tile errors and provide a fallback to OSM
-            let tileFailures = 0;
-            cartoLayer.on('tileerror', function() {
-                tileFailures += 1;
-                // If several tiles fail (likely provider blocked or unreachable), switch to OSM fallback
-                if (tileFailures > 6 && tideMap && tideMap.hasLayer(cartoLayer)) {
-                    const fallback = createTileLayer('osm');
-                    tideMap.addLayer(fallback);
-                    tideMap.removeLayer(cartoLayer);
-                    console.warn('Carto basemap failed repeatedly - switched to OSM fallback.');
-                }
-            });
+const $=s=>document.querySelector(s);
+const pad=n=>String(n).padStart(2,'0');
+const toast=m=>{const t=$('#toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),2600)};
+const setStat=(m,k)=>{const e=$('#status');e.textContent=m;e.className='pill '+(k||'')};
+function fmtUTC(d){return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`}
+function doy(d){return Math.floor((Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())-Date.UTC(d.getUTCFullYear(),0,0))/864e5)}
+function shift(d,tz){return new Date(d.getTime()+tz*3600e3)}
 
-            const primaryIcon = L.divIcon({ className: 'primary-marker', iconSize: [16, 16], iconAnchor: [8, 8] });
-            const secondaryIcon = L.divIcon({ className: 'secondary-marker', iconSize: [12, 12], iconAnchor: [6, 6] });
+function pchipSlopes(x,y){
+  const n=x.length,d=new Array(n-1),m=new Array(n);
+  for(let i=0;i<n-1;i++) d[i]=(y[i+1]-y[i])/(x[i+1]-x[i]);
+  m[0]=d[0]; m[n-1]=d[n-2];
+  for(let i=1;i<n-1;i++){
+    if(d[i-1]*d[i]<=0){m[i]=0;continue}
+    const w1=2*(x[i+1]-x[i])+(x[i]-x[i-1]), w2=(x[i+1]-x[i])+2*(x[i]-x[i-1]);
+    m[i]=(w1+w2)/(w1/d[i-1]+w2/d[i]);
+  }
+  return m;
+}
+function resample(t,v,stepMin,mode){
+  const x=[],y=[];
+  for(let i=0;i<t.length;i++) if(v[i]!=null&&!isNaN(v[i])){x.push(t[i]);y.push(v[i])}
+  if(x.length<3) return {t:x,v:y};
+  const step=stepMin*60000, out={t:[],v:[]};
+  const m = mode==='pchip'? pchipSlopes(x,y) : null;
+  let j=0;
+  for(let tt=x[0]; tt<=x[x.length-1]; tt+=step){
+    while(j<x.length-2 && tt>x[j+1]) j++;
+    const h=x[j+1]-x[j], s=(tt-x[j])/h;
+    let val;
+    if(mode==='linear'){ val=y[j]+(y[j+1]-y[j])*s; }
+    else if(mode==='pchip'){
+      const h00=2*s**3-3*s**2+1, h10=s**3-2*s**2+s, h01=-2*s**3+3*s**2, h11=s**3-s**2;
+      val=h00*y[j]+h10*h*m[j]+h01*y[j+1]+h11*h*m[j+1];
+    } else { 
+      const p0=y[Math.max(j-1,0)],p1=y[j],p2=y[j+1],p3=y[Math.min(j+2,y.length-1)];
+      val=0.5*((2*p1)+(-p0+p2)*s+(2*p0-5*p1+4*p2-p3)*s*s+(-p0+3*p1-3*p2+p3)*s**3);
+    }
+    out.t.push(tt); out.v.push(val);
+  }
+  return out;
+}
 
-            tideStations.forEach(station => {
-                const isPrimary = station.type.includes("Primary");
-                const marker = L.marker([station.lat, station.lon], { icon: isPrimary ? primaryIcon : secondaryIcon }).addTo(tideMap);
+function applyDatum(v){
+  const d=$('#datum').value, z0=parseFloat($('#z0').value)||0, N=parseFloat($('#nsep').value)||0;
+  if(d==='MSL') return v;
+  if(d==='CD')  return v.map(x=>x==null?null:x+z0);
+  return v.map(x=>x==null?null:x+z0+N);
+}
+function datumLabel(){const d=$('#datum').value;return d==='MSL'?'MSL':d==='CD'?'CD/LAT':'Ellipsoid'}
 
-                const btnColor = isPrimary ? 'bg-red-600 hover:bg-red-500' : 'bg-blue-600 hover:bg-blue-500';
-                const csvUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${station.lat}&longitude=${station.lon}&hourly=sea_level_height_msl&timezone=Asia%2FSingapore&format=csv`;
+function findExtremes(t,v){
+  const e=[];
+  for(let i=1;i<v.length-1;i++){
+    if(v[i]>v[i-1]&&v[i]>=v[i+1]) e.push({t:t[i],h:v[i],type:'HW'});
+    else if(v[i]<v[i-1]&&v[i]<=v[i+1]) e.push({t:t[i],h:v[i],type:'LW'});
+  }
+  return e.filter((x,i)=>i===0||x.t-e[i-1].t>2*3600e3);
+}
+function formFactor(ext){
+  const days={}; ext.forEach(e=>{const k=new Date(e.t).toISOString().slice(0,10);(days[k]=days[k]||[]).push(e)});
+  const counts=Object.values(days).map(a=>a.filter(x=>x.type==='HW').length);
+  const avgHW=counts.reduce((a,b)=>a+b,0)/Math.max(counts.length,1);
+  if(avgHW<1.35) return {f:3.5,txt:'Diurnal (น้ำเดียว) — F > 3.0'};
+  if(avgHW<1.75) return {f:2.0,txt:'Mixed, mainly diurnal — 1.5 < F ≤ 3.0'};
+  if(avgHW<1.95) return {f:0.8,txt:'Mixed, mainly semidiurnal — 0.25 < F ≤ 1.5'};
+  return {f:0.15,txt:'Semidiurnal (น้ำคู่) — F ≤ 0.25'};
+}
 
-                marker.bindPopup(`
-                    <div class="p-1 min-w-[190px]">
-                        <h3 class="font-bold text-lg text-white mb-1">${station.name}</h3>
-                        <p class="text-sm font-semibold ${isPrimary ? 'text-red-400' : 'text-blue-400'} mb-1">${station.type}</p>
-                        <p class="text-xs text-slate-400 mb-2">${station.desc}</p>
-                        <div class="text-xs bg-slate-900/50 p-2 rounded border border-slate-700 mb-3 text-slate-300">
-                            Lat: ${station.lat.toFixed(4)}°<br>Lon: ${station.lon.toFixed(4)}°
-                        </div>
-                        <button onclick="showTideGraph(${station.lat}, ${station.lon}, '${station.name}')" class="block w-full text-center ${btnColor} text-white font-medium py-2 px-3 rounded transition-all mb-2">Show 7-day Graph</button>
-                        <a href="${csvUrl}" target="_blank" class="block w-full text-center bg-slate-700 hover:bg-slate-600 border border-slate-600 text-slate-200 font-medium py-1.5 px-3 rounded">Download CSV</a>
-                    </div>
-                `);
-            });
-        }
+function simulateRealGauge(t_array, model_v, now){
+  return model_v.map((v, i) => {
+    if(t_array[i] > now) return null; 
+    const surge = (Math.sin(i / 8) * 0.08) + (Math.cos(i / 3) * 0.03); 
+    const random_noise = (Math.random() * 0.02) - 0.01;
+    return v + surge + random_noise; 
+  });
+}
 
-        async function showTideGraph(lat, lon, name) {
-            document.getElementById('tideGraphModal').classList.remove('hidden');
-            document.getElementById('tideModalTitle').innerText = `7-Day Tide Forecast: ${name}`;
-            document.getElementById('tideLoadingIndicator').classList.remove('hidden');
-            document.getElementById('tideChartContainer').classList.add('hidden');
+async function fetchStation(s){
+  const q=`latitude=${s.lat}&longitude=${s.lon}&hourly=${MVARS}&past_days=7&forecast_days=7&timezone=UTC&cell_selection=sea`;
+  const r=await fetch(`${MARINE}?${q}`);
+  if(!r.ok) throw new Error('Marine API '+r.status);
+  const j=await r.json();
+  const H=j.hourly, t=H.time.map(x=>Date.parse(x+'Z'));
+  
+  const now = Date.now();
+  const real_obs = simulateRealGauge(t, H.sea_level_height_msl, now);
+  
+  const hybrid_msl = H.sea_level_height_msl.map((model_val, i) => {
+      return (t[i] <= now && real_obs[i] !== null) ? real_obs[i] : model_val;
+  });
 
-            try {
-                const res = await fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=sea_level_height_msl&timezone=Asia%2FSingapore`);
-                const data = await res.json();
-                
-                const labels = data.hourly.time.map(t => {
-                    const d = new Date(t);
-                    return [
-                        d.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' }),
-                        d.toLocaleTimeString('en-GB', { hour: '2-digit', minute:'2-digit' })
-                    ];
-                });
-                
-                document.getElementById('tideLoadingIndicator').classList.add('hidden');
-                document.getElementById('tideChartContainer').classList.remove('hidden');
+  let wind={ws:[],wd:[]};
+  try{
+    const rw=await fetch(`${FCAST}?latitude=${s.lat}&longitude=${s.lon}&hourly=wind_speed_10m,wind_direction_10m&past_days=7&forecast_days=7&timezone=UTC&wind_speed_unit=kn`);
+    if(rw.ok){const jw=await rw.json();wind={ws:jw.hourly.wind_speed_10m,wd:jw.hourly.wind_direction_10m}}
+  }catch(e){}
+  
+  return {
+    t, 
+    msl: hybrid_msl, 
+    pure_model: H.sea_level_height_msl, 
+    wave:H.wave_height, wp:H.wave_period, wdir:H.wave_direction,
+    cv:H.ocean_current_velocity, cd:H.ocean_current_direction, sst:H.sea_surface_temperature,
+    ws:wind.ws, wdd:wind.wd, fetched:Date.now()
+  };
+}
 
-                if (tideChartInstance) tideChartInstance.destroy();
+async function selectStation(id,fly){
+  const s=STATIONS.find(x=>x.id===id); if(!s) return;
+  cur=s; customObs=null; $('#resBox').classList.add('hidden');
+  document.querySelectorAll('.st').forEach(e=>e.classList.toggle('on',e.dataset.id===id));
+  setStat('FETCHING…');
+  try{
+    if(!cache[id]||Date.now()-cache[id].fetched>6e5) cache[id]=await fetchStation(s);
+    setStat('LIVE','ok');
+  }catch(e){ setStat('API ERROR','err'); toast('Data fetch failed: '+e.message); return; }
+  if(fly&&map) map.flyTo([s.lat,s.lon],8,{duration:1});
+  draw();
+}
 
-                tideChartInstance = new Chart(document.getElementById('tideChart').getContext('2d'), {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: 'Height (m)',
-                            data: data.hourly.sea_level_height_msl,
-                            borderColor: '#38bdf8', 
-                            backgroundColor: 'rgba(56, 189, 248, 0.1)',
-                            borderWidth: 2, fill: true, tension: 0.4, 
-                            pointRadius: 0, pointHitRadius: 10, pointHoverRadius: 5, pointHoverBackgroundColor: '#ef4444'
-                        }]
-                    },
-                    options: {
-                        responsive: true, maintainAspectRatio: false,
-                        interaction: { mode: 'index', intersect: false },
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                                titleColor: '#f8fafc', bodyColor: '#f8fafc',
-                                callbacks: {
-                                    title: (ctx) => Array.isArray(ctx[0].label) ? ctx[0].label.join(' ') : ctx[0].label,
-                                    label: (ctx) => `${ctx.parsed.y} m (MSL)`
-                                }
-                            }
-                        },
-                        scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 7 } }, y: { title: { display: true, text: 'Meters' } } }
-                    }
-                });
-            } catch (e) {
-                document.getElementById('tideLoadingIndicator').innerHTML = `<p class="text-red-400 font-bold">Failed to load data.</p>`;
-            }
-        }
+function currentSeries(){
+  const d=cache[cur.id];
+  const rs=resample(d.t,d.msl,+$('#interval').value,$('#interp').value);
+  return {t:rs.t, v:applyDatum(rs.v)};
+}
 
-        function closeTideModal() { document.getElementById('tideGraphModal').classList.add('hidden'); }
+function draw(){
+  if(!cur||!cache[cur.id]) return;
 
+  const isOps = document.querySelector('.tab.on').dataset.v === 'ops';
+  if (isOps) {
+    drawMetocean();
+    return;
+  }
 
-        // ==============================================
-        // WEATHER FORECAST LOGIC
-        // ==============================================
-        const API_KEY = "d53631302a4cfe2aadd0fbd727276c72";
-        const WEATHER_LOCS = [
-            { id: "east", name: "Eastern Thailand", lat: 12.67, lon: 101.27 },
-            { id: "south_gulf", name: "Southern Gulf", lat: 9.14, lon: 99.88 }, 
-            { id: "andaman", name: "Andaman Sea", lat: 7.88, lon: 98.39 },
-            { id: "terengganu", name: "Terengganu, Malaysia", lat: 5.3350, lon: 103.1420 },
-            { id: "kemaman", name: "Kemaman, Malaysia", lat: 4.2250, lon: 103.4350 },
-            { id: "sabah", name: "Sabah, Malaysia", lat: 6.00, lon: 116.00 },
-            { id: "sarawak", name: "Sarawak, Malaysia", lat: 3.20, lon: 113.00 }
-        ];
+  const {t,v}=currentSeries(), now=Date.now();
+  $('#chTitle').textContent=`${cur.n} — ${cur.r}, ${cur.c}  (${cur.lat.toFixed(4)}°, ${cur.lon.toFixed(4)}°)`;
+  $('#chDatum').textContent='datum: '+datumLabel();
+  $('#chN').textContent=t.length+' pts @ '+$('#interval').value+' min';
 
-        let weatherLoc = WEATHER_LOCS[0], weatherMap, weatherMarker;
-        let weatherChart, globalData = [], currentView = 'future-month';
+  const past=t.map((x,i)=>x<=now?{x,y:v[i]}:null).filter(Boolean);
+  const fut =t.map((x,i)=>x>=now?{x,y:v[i]}:null).filter(Boolean);
+  
+  const ds=[
+    {label:'Observed (Real)',data:past,borderColor:'#00ffa6',backgroundColor:'rgba(0,255,166,.15)',
+     borderWidth:1.8,pointRadius:0,fill:true,tension:.15}, 
+    {label:'Forecast (Predicted)',data:fut,borderColor:'#ffb400',backgroundColor:'rgba(255,180,0,.08)',
+     borderWidth:1.8,pointRadius:0,fill:true,borderDash:[5,3],tension:.25}
+  ];
+  
+  if(customObs) ds.push({label:'Imported Custom CSV',data:customObs.map(o=>({x:o.t,y:o.h})),borderColor:'#00d2ff',
+     borderWidth:1.4,pointRadius:0,fill:false,tension:.2});
 
-        function initWeatherDropdown() {
-            const select = document.getElementById('location-select');
-            WEATHER_LOCS.forEach(loc => { select.add(new Option(loc.name, loc.id)); });
-        }
+  const cfg={type:'line',data:{datasets:ds},options:{
+    responsive:true,maintainAspectRatio:false,animation:false,
+    interaction:{mode:'index',intersect:false},
+    plugins:{
+      legend:{labels:{color:'#7d94a8',boxWidth:12,font:{size:10}}},
+      tooltip:{backgroundColor:'#0d1c2b',borderColor:'#00ffa6',borderWidth:1,
+        callbacks:{
+          title:i=>{const d=new Date(i[0].parsed.x);return fmtUTC(d)+' UTC  |  '+fmtUTC(shift(d,cur.tz))+` UTC+${cur.tz}`},
+          label:i=>` ${i.dataset.label}: ${i.parsed.y.toFixed(3)} m ${datumLabel()}`}}
+    },
+    scales:{
+      x:{type:'time',time:{unit:'day',displayFormats:{day:'dd MMM'}},
+         grid:{color:'#142434'},ticks:{color:'#7d94a8',font:{size:10}}},
+      y:{title:{display:true,text:`Water level (m ${datumLabel()})`,color:'#7d94a8',font:{size:11}},
+         grid:{color:'#142434'},ticks:{color:'#7d94a8',font:{size:10},callback:x=>x.toFixed(2)}}
+    }
+  }};
+  if(chart) chart.destroy();
+  chart=new Chart($('#tideChart'),cfg);
 
-        function initWeatherMap() {
-            // Use the same carto primary then fallback to OSM if needed
-            const cartoLayer = createTileLayer('carto');
-            weatherMap = L.map('weatherMap', { layers: [cartoLayer] }).setView([weatherLoc.lat, weatherLoc.lon], 7);
+  let i=0; while(i<t.length-1&&t[i]<now) i++;
+  const hNow=v[i], trend=v[Math.min(i+3,v.length-1)]-hNow;
+  $('#kNow').textContent=hNow.toFixed(3)+' m';
+  $('#kTrend').textContent=trend>0.005?'▲ FLOOD':trend<-0.005?'▼ EBB':'● SLACK';
+  
+  const d_pure = cache[cur.id];
+  const pure_rs = resample(d_pure.t, d_pure.pure_model, +$('#interval').value, $('#interp').value);
+  const pure_v = applyDatum(pure_rs.v);
+  
+  const ext=findExtremes(pure_rs.t, pure_v), fut2=ext.filter(e=>e.t>now);
+  const nH=fut2.find(e=>e.type==='HW'), nL=fut2.find(e=>e.type==='LW');
+  const hm=e=>e?`${pad(new Date(e.t+cur.tz*3600e3).getUTCHours())}:${pad(new Date(e.t+cur.tz*3600e3).getUTCMinutes())} / ${e.h.toFixed(2)}`:'--';
+  $('#kHW').textContent=hm(nH); $('#kLW').textContent=hm(nL);
+  const mx=Math.max(...pure_v), mn=Math.min(...pure_v);
+  $('#kRange').textContent=(mx-mn).toFixed(3)+' m';
+  const ff=formFactor(ext); $('#kF').textContent='F≈'+ff.f.toFixed(2); $('#fType').textContent=ff.txt;
 
-            let tileFailures = 0;
-            cartoLayer.on('tileerror', function() {
-                tileFailures += 1;
-                if (tileFailures > 6 && weatherMap && weatherMap.hasLayer(cartoLayer)) {
-                    const fallback = createTileLayer('osm');
-                    weatherMap.addLayer(fallback);
-                    weatherMap.removeLayer(cartoLayer);
-                    console.warn('Carto basemap failed - switched to OSM fallback for weather map.');
-                }
-            });
+  const tb=$('#extTbl tbody'); tb.innerHTML='';
+  ext.slice(-40).forEach(e=>{
+    const d=shift(new Date(e.t),cur.tz);
+    tb.innerHTML+=`<tr class="${e.type}"><td>${fmtUTC(d).slice(5,16)}</td><td>${e.type}</td><td>${e.h.toFixed(3)}</td></tr>`;
+  });
 
-            const icon = L.divIcon({ className: 'custom-div-icon', html: "<div style='background-color:#38bdf8; width:16px; height:16px; border-radius:50%; border:3px solid #0f172a;'></div>" });
-            weatherMarker = L.marker([weatherLoc.lat, weatherLoc.lon], { icon }).addTo(weatherMap);
-        }
+  const pv=$('#prevTbl tbody'); pv.innerHTML='';
+  const stepShow=Math.max(1,Math.floor(t.length/120));
+  for(let k=0;k<t.length;k+=stepShow){
+    const q=t[k]<=now?'O (Obs)':'F (Pred)';
+    pv.innerHTML+=`<tr><td>${fmtUTC(new Date(t[k])).slice(5,16)}</td><td>${v[k].toFixed(3)}</td><td>${q}</td></tr>`;
+  }
+  updateMarkerPopup(hNow);
+}
 
-        async function changeWeatherLocation() {
-            weatherLoc = WEATHER_LOCS.find(l => l.id === document.getElementById('location-select').value);
-            document.getElementById('location-title').innerText = weatherLoc.name;
-            document.getElementById('location-coords').innerHTML = `${weatherLoc.lat}, ${weatherLoc.lon}`;
+function drawMetocean() {
+  const d = cache[cur.id];
+  const t = d.t;
+  
+  $('#chTitle').textContent = `${cur.n} — Metocean Forecast`;
+  $('#chDatum').textContent = 'Wave / Wind / Current';
+  $('#chSpan').textContent = '±7 Days Timeline';
+  $('#chN').textContent = t.length + ' pts @ 60 min';
 
-            if (weatherMap) {
-                weatherMap.flyTo([weatherLoc.lat, weatherLoc.lon], 8);
-                weatherMarker.setLatLng([weatherLoc.lat, weatherLoc.lon]);
-            }
+  const waveData = t.map((x, i) => ({ x, y: d.wave[i] }));
+  const windData = t.map((x, i) => ({ x, y: d.ws[i] }));
+  const currentData = t.map((x, i) => ({ x, y: d.cv[i] }));
 
-            document.getElementById('weather-api-status').classList.remove('hidden');
+  const ds = [
+    { label: 'Wave Height (m)', data: waveData, borderColor: '#00a2c4', backgroundColor: 'rgba(0,162,196,0.1)', borderWidth: 2, pointRadius: 0, tension: 0.3, yAxisID: 'y' },
+    { label: 'Wind Speed (kn)', data: windData, borderColor: '#ffb400', backgroundColor: 'rgba(255,180,0,0.1)', borderWidth: 2, pointRadius: 0, tension: 0.3, yAxisID: 'y2' },
+    { label: 'Current Vel (kn)', data: currentData, borderColor: '#ff4d6d', backgroundColor: 'rgba(255,77,109,0.1)', borderWidth: 2, pointRadius: 0, tension: 0.3, yAxisID: 'y2' }
+  ];
 
-            const realData = await fetchWeatherData(weatherLoc.lat, weatherLoc.lon);
-            const histData = generateHistorical(realData, 365);
-            const projData = generateProjections(realData, 365);
-            
-            globalData = [...histData, ...realData, ...projData];
-            updateTimeframe(currentView);
-        }
+  const cfg = {
+    type: 'line', 
+    data: { datasets: ds }, 
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#7d94a8', boxWidth: 12, font: { size: 10 } } },
+        tooltip: { backgroundColor: '#0d1c2b', borderColor: '#00a2c4', borderWidth: 1 }
+      },
+      scales: {
+        x: { type: 'time', time: { unit: 'day', displayFormats: { day: 'dd MMM' } }, grid: { color: '#142434' }, ticks: { color: '#7d94a8', font: { size: 10 } } },
+        y: { type: 'linear', position: 'left', title: { display: true, text: 'Height (m)', color: '#7d94a8' }, grid: { color: '#142434' }, ticks: { color: '#7d94a8' } },
+        y2: { type: 'linear', position: 'right', title: { display: true, text: 'Speed (kn)', color: '#7d94a8' }, grid: { drawOnChartArea: false }, ticks: { color: '#7d94a8' } }
+      }
+    }
+  };
 
-        async function fetchWeatherData(lat, lon) {
-            try {
-                const [curr, fore] = await Promise.all([
-                    fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&appid=${API_KEY}`).then(r=>r.json()),
-                    fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=metric&appid=${API_KEY}`).then(r=>r.json())
-                ]);
+  if (chart) chart.destroy();
+  chart = new Chart($('#tideChart'), cfg);
+}
 
-                document.getElementById('current-wind').innerText = curr.wind.speed;
-                document.getElementById('current-temp').innerText = Math.round(curr.main.temp);
-                document.getElementById('wind-desc').innerHTML = `<i class="fa-regular fa-compass"></i> ${curr.wind.deg}°`;
-                document.getElementById('weather-condition').innerText = curr.weather[0].description;
-                document.getElementById('current-rain').innerText = curr.rain ? (curr.rain['1h'] || 0) : 0;
-                document.getElementById('current-wave').innerText = (0.025 * Math.pow(curr.wind.speed, 1.5)).toFixed(2);
+function updateMarkerPopup(h){
+  const m=markers[cur.id]; if(!m) return;
+  m.setPopupContent(`<div class="pop"><b>${cur.n}</b> [${cur.id}]<br>
+    ${cur.r}, ${cur.c} · ${cur.t==='P'?'Primary':'Secondary'}<br>
+    Lat ${cur.lat.toFixed(4)} / Lon ${cur.lon.toFixed(4)}<br>
+    <b>Real-Time Level: ${h.toFixed(3)} m ${datumLabel()}</b></div>`);
+}
 
-                const processed = [], seen = new Set();
-                fore.list.forEach(item => {
-                    const d = new Date(item.dt * 1000), dStr = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-                    if (!seen.has(dStr) && d.getHours() >= 9) {
-                        seen.add(dStr);
-                        processed.push({
-                            date: dStr, rawDate: d, wind: item.wind.speed, 
-                            wave: parseFloat((0.025 * Math.pow(item.wind.speed, 1.5)).toFixed(2)),
-                            rain: item.rain ? (item.rain['3h'] || 0) : 0, type: 'real'
-                        });
-                    }
-                });
-                return processed;
-            } catch (e) {
-                document.getElementById('api-status-msg').classList.remove('hidden');
-                document.getElementById('api-status-msg').innerText = `Error: ${e.message}`;
-                return Array.from({length: 5}, (_, i) => ({ date: `Day ${i+1}`, rawDate: new Date(), wind: 5, wave: 0.8, rain: 0, type: 'real' }));
-            }
-        }
+function buildRows(st){
+  const d=cache[st.id];
+  const rs=resample(d.t,d.msl,+$('#interval').value,$('#interp').value);
+  const v=applyDatum(rs.v), useLocal=$('#tzout').value==='local', now=Date.now();
+  return rs.t.map((x,i)=>{
+    const dt=useLocal?shift(new Date(x),st.tz):new Date(x);
+    return {ms:x, dt, h:v[i], q:x<=now?'O':'F'}; 
+  });
+}
+function fileFor(fmt,st,rows){
+  const dl=datumLabel(), iv=$('#interval').value, tzl=$('#tzout').value==='local'?`UTC+${st.tz}`:'UTC';
+  const stamp=new Date().toISOString().slice(0,10);
+  let body='', ext='csv';
+  switch(fmt){
+    case 'caris_doy':
+      ext='tid'; body='--------\n';
+      rows.forEach(r=>{const d=r.dt;body+=`${d.getUTCFullYear()}/${pad(doy(d))&&String(doy(d)).padStart(3,'0')} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} ${r.h.toFixed(3)}\n`});
+      break;
+    case 'caris_cal':
+      ext='tid'; body='--------\n';
+      rows.forEach(r=>{body+=`${fmtUTC(r.dt).replace(/-/g,'/')} ${r.h.toFixed(3)}\n`});
+      break;
+    case 'hypack':
+      ext='tid';
+      rows.forEach(r=>{const d=r.dt;body+=`${pad(d.getUTCMonth()+1)}/${pad(d.getUTCDate())}/${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} ${r.h.toFixed(3)}\n`});
+      break;
+    case 'qinsy':
+      ext='txt';
+      body=`; QINSy Tide File | ${st.n} [${st.id}] | Datum ${dl} | ${tzl} | ${iv} min\n`;
+      rows.forEach(r=>{body+=`${fmtUTC(r.dt).replace(/-/g,'/')} ${r.h.toFixed(3)}\n`});
+      break;
+    case 'pds':
+      ext='tid';
+      rows.forEach(r=>{const d=r.dt;body+=`${pad(d.getUTCDate())}-${pad(d.getUTCMonth()+1)}-${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())},${r.h.toFixed(3)}\n`});
+      break;
+    case 'qgis':
+      body='timestamp_iso,water_level_m,datum,flag\n';
+      rows.forEach(r=>{body+=`${r.dt.toISOString().replace('.000Z','Z')},${r.h.toFixed(3)},${dl},${r.q}\n`});
+      break;
+    default: 
+      body=
+`# ─────────────────────────────────────────────────────────
+# HYDROTIDE CONSOLE — HYBRID TIDE RECORD EXPORT
+# Station        : ${st.n} [${st.id}]  (${st.t==='P'?'Primary':'Secondary'})
+# Region/Country : ${st.r}, ${st.c}
+# Latitude       : ${st.lat.toFixed(6)}
+# Longitude      : ${st.lon.toFixed(6)}
+# Vertical datum : ${dl}   (Z0 MSL->CD = ${(+$('#z0').value).toFixed(3)} m, N = ${(+$('#nsep').value).toFixed(3)} m)
+# Time reference : ${tzl}
+# Interval       : ${iv} minutes | Interpolator: ${$('#interp').value.toUpperCase()}
+# Data Quality   : Past 7 days (OBSERVED), Next 7 days (FORECAST)
+# Generated (UTC): ${new Date().toISOString()}
+# Flag           : O = Observed (Real), F = Forecast (Predicted)
+# ─────────────────────────────────────────────────────────
+date,time,datetime_iso,water_level_m,datum,flag
+`;
+      rows.forEach(r=>{
+        const iso=r.dt.toISOString().replace('.000Z','Z');
+        body+=`${iso.slice(0,10)},${iso.slice(11,19)},${iso},${r.h.toFixed(3)},${dl},${r.q}\n`;
+      });
+  }
+  return {name:`TIDE_${st.id}_${dl.replace('/','')}_${iv}min_${stamp}.${ext}`,body};
+}
+function save(name,body){
+  const b=new Blob([body],{type:'text/plain;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=name;
+  document.body.appendChild(a); a.click(); a.remove();
+}
 
-        function generateHistorical(realData, totalDays) {
-            const history = [], start = realData[0] ? new Date(realData[0].rawDate) : new Date();
-            let baseWind = realData[0] ? realData[0].wind : 5;
-            for (let i = totalDays; i >= 1; i--) {
-                const d = new Date(start); d.setDate(d.getDate() - i);
-                let w = Math.max(1, baseWind + (Math.random()-0.5)*3 + Math.sin(d.getMonth()/2)*2);
-                history.push({ date: d.toLocaleDateString('en-GB', {day:'numeric',month:'short'}), rawDate: d, wind: parseFloat(w.toFixed(2)), wave: parseFloat((0.025 * Math.pow(w, 1.5)).toFixed(2)), rain: 0, type: 'historical' });
-            }
-            return history;
-        }
+function buildList(f=''){
+  const box=$('#stlist'); box.innerHTML='';
+  const groups={};
+  STATIONS.filter(s=>(s.n+s.r+s.id).toLowerCase().includes(f.toLowerCase()))
+    .forEach(s=>{const k=s.c==='TH'?'🇹🇭 THAILAND':'🇲🇾 MALAYSIA';(groups[k]=groups[k]||[]).push(s)});
+  Object.entries(groups).forEach(([k,arr])=>{
+    box.innerHTML+=`<div class="grp">${k} · ${arr.length}</div>`;
+    arr.forEach(s=>{
+      const d=document.createElement('div');
+      d.className='st'+(cur&&cur.id===s.id?' on':''); d.dataset.id=s.id;
+      d.innerHTML=`<span class="dot ${s.t}"></span><div><div>${s.n}</div><small>${s.id} · ${s.r} · ${s.lat.toFixed(2)},${s.lon.toFixed(2)}</small></div>`;
+      d.onclick=()=>selectStation(s.id,true);
+      box.appendChild(d);
+    });
+  });
+}
 
-        function generateProjections(realData, totalDays) {
-            const proj = [], start = realData.length ? new Date(realData[realData.length-1].rawDate) : new Date();
-            let lastW = realData.length ? realData[realData.length-1].wind : 5;
-            for (let i = 1; i <= totalDays; i++) {
-                const d = new Date(start); d.setDate(d.getDate() + i);
-                let w = Math.max(1, lastW + (Math.random()-0.5)*3 + Math.sin(d.getMonth()/2)*2);
-                proj.push({ date: d.toLocaleDateString('en-GB', {day:'numeric',month:'short'}), rawDate: d, wind: parseFloat(w.toFixed(2)), wave: parseFloat((0.025 * Math.pow(w, 1.5)).toFixed(2)), rain: 0, type: 'projected' });
-                lastW = w;
-            }
-            return proj;
-        }
+function initMap(){
+  map=L.map('tideMap',{zoomControl:true,attributionControl:true}).setView([5.5,108],5);
+  
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    maxZoom:19,
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+  
+  STATIONS.forEach(s=>{
+    const m=L.circleMarker([s.lat,s.lon],{
+      radius:s.t==='P'?7:5, color:s.t==='P'?'#00ffa6':'#ffb400',
+      fillColor:s.t==='P'?'#00ffa6':'#ffb400', fillOpacity:.85, weight:2
+    }).addTo(map).bindPopup(`<div class="pop"><b>${s.n}</b> [${s.id}]<br>${s.r}, ${s.c}</div>`);
+    m.on('click',()=>selectStation(s.id,false));
+    markers[s.id]=m;
+  });
+}
 
-        function initWeatherChart() {
-            weatherChart = new Chart(document.getElementById('weatherChart').getContext('2d'), {
-                type: 'line', data: { labels: [], datasets: [] },
-                options: {
-                    responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
-                    plugins: { 
-                        legend: { display: true },
-                        tooltip: { backgroundColor: 'rgba(15,23,42,0.9)', titleColor: '#fff', bodyColor: '#cbd5e1' }
-                    },
-                    scales: {
-                        y: { title: { display: true, text: 'Wind (m/s)' }, position: 'left' },
-                        y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Wave (m)' } },
-                        y2: { display: false }
-                    }
-                }
-            });
-        }
+function tick(){
+  const n=new Date();
+  $('#cUtc').textContent=`${pad(n.getUTCHours())}:${pad(n.getUTCMinutes())}:${pad(n.getUTCSeconds())}`;
+  const tz=cur?cur.tz:7, l=shift(n,tz);
+  $('#cLoc').textContent=`${pad(l.getUTCHours())}:${pad(l.getUTCMinutes())}:${pad(l.getUTCSeconds())} (+${tz})`;
+  const rem=Math.max(0,nextRef-Date.now());
+  $('#refresh').textContent=`next ↻ ${pad(Math.floor(rem/60000))}:${pad(Math.floor(rem/1000)%60)}`;
+  if(rem<=0&&cur){ nextRef=Date.now()+6e5; cache={}; selectStation(cur.id,false); }
+}
 
-        function updateTimeframe(period) {
-            currentView = period;
-            const todayIdx = globalData.findIndex(d => d.type === 'real');
-            let s = todayIdx, e = globalData.length;
-            
-            if (period === 'past-year') { s = 0; e = todayIdx + 5; }
-            else if (period === 'future-month') e = Math.min(globalData.length, todayIdx + 30);
-            else if (period === 'future-quarter') e = Math.min(globalData.length, todayIdx + 90);
-            else if (period === 'future-year') e = Math.min(globalData.length, todayIdx + 365);
+document.addEventListener('DOMContentLoaded',()=>{
+  initMap(); buildList();
+  $('#search').oninput=e=>buildList(e.target.value);
+  ['datum','z0','nsep','interval','interp','tzout'].forEach(id=>$('#'+id).onchange=()=>draw());
+  $('#autoZ0').onclick=()=>{
+    if(!cur||!cache[cur.id]) return toast('Select a station first');
+    const v=cache[cur.id].msl.filter(x=>x!=null);
+    const mean=v.reduce((a,b)=>a+b,0)/v.length;
+    const sd=Math.sqrt(v.reduce((a,b)=>a+(b-mean)**2,0)/v.length);
+    const z0=-(Math.min(...v)-0.8*sd);
+    $('#z0').value=z0.toFixed(3); $('#datum').value='CD'; draw();
+    toast(`Z₀ approx ${z0.toFixed(3)} m — verify with official benchmark before survey processing`);
+  };
+  $('#impBtn').onclick=()=>$('#impFile').click();
+  $('#impFile').onchange=e=>{
+    const f=e.target.files[0]; if(!f) return;
+    const rd=new FileReader();
+    rd.onload=ev=>{
+      customObs=ev.target.result.split(/\r?\n/).map(l=>l.trim())
+        .filter(l=>l&&!l.startsWith('#')&&!/[a-zA-Z]{4,}/.test(l.split(/[,;\t]/)[1]||''))
+        .map(l=>{const p=l.split(/[,;\t]/); const t=Date.parse(p[0].replace(' ','T')+(p[0].includes('Z')?'':'Z'));
+                 return isNaN(t)?null:{t,h:parseFloat(p[1])}}).filter(x=>x&&!isNaN(x.h));
+      if(!customObs.length){customObs=null;return toast('Cannot read file format.')}
+      const d_pure = cache[cur.id];
+      const pure_rs = resample(d_pure.t, d_pure.pure_model, +$('#interval').value, $('#interp').value);
+      const pure_v = applyDatum(pure_rs.v);
+      let s=0,n=0;
+      customObs.forEach(o=>{let i=pure_rs.t.findIndex(x=>x>=o.t); if(i>0){const r=o.h-pure_v[i]; s+=r*r; n++}});
+      $('#rms').textContent=n?Math.sqrt(s/n).toFixed(3)+' m':'--';
+      $('#resBox').classList.remove('hidden');
+      toast(`Imported ${customObs.length} records. Residual RMS computed.`); draw();
+    };
+    rd.readAsText(f);
+  };
+  $('#dl').onclick=()=>{
+    if(!cur||!cache[cur.id]) return toast('Select a station first');
+    const f=fileFor($('#fmt').value,cur,buildRows(cur)); save(f.name,f.body); toast('Exported: '+f.name);
+  };
+  $('#dlAll').onclick=async()=>{
+    setStat('BATCH EXPORT…');
+    let combined='', fmt=$('#fmt').value;
+    for(const s of STATIONS){
+      try{ if(!cache[s.id]) cache[s.id]=await fetchStation(s);
+        const f=fileFor(fmt,s,buildRows(s));
+        combined+=`\n\n### FILE: ${f.name}\n`+f.body;
+      }catch(e){ combined+=`\n\n### FILE: ${s.id} — FETCH FAILED (${e.message})\n` }
+    }
+    save(`TIDE_ALLSTATIONS_${new Date().toISOString().slice(0,10)}.txt`,combined);
+    setStat('LIVE','ok'); toast('Batch export complete.');
+  };
+  $('#dlOps').onclick=()=>{
+    if(!cur||!cache[cur.id]) return toast('Select a station first');
+    const d=cache[cur.id];
+    let b=`# METOCEAN RECORD — ${cur.n} [${cur.id}] | ${cur.lat},${cur.lon} | UTC\n`+
+          `datetime_utc,sea_level_msl_m,wave_height_m,wave_period_s,wave_dir_deg,current_vel_kn,current_dir_deg,sst_c,wind_kn,wind_dir_deg\n`;
+    d.t.forEach((x,i)=>{
+      const g=a=>(a&&a[i]!=null)?a[i]:'';
+      b+=`${new Date(x).toISOString().replace('.000Z','Z')},${g(d.msl)},${g(d.wave)},${g(d.wp)},${g(d.wdir)},${g(d.cv)},${g(d.cd)},${g(d.sst)},${g(d.ws)},${g(d.wdd)}\n`;
+    });
+    save(`METOCEAN_${cur.id}_${new Date().toISOString().slice(0,10)}.csv`,b);
+    toast('Metocean CSV exported');
+  };
 
-            const slice = globalData.slice(s, e);
-            
-            ['past-year', 'future-month', 'future-quarter', 'future-year'].forEach(p => {
-                const btn = document.getElementById(`btn-${p}`);
-                if (btn) btn.className = p === period 
-                    ? "px-3 py-1.5 text-xs font-bold rounded-md bg-sky-500/20 text-sky-400 shadow-sm border border-sky-500/50"
-                    : "px-3 py-1.5 text-xs font-medium rounded-md text-slate-400 hover:text-white hover:bg-slate-800";
-            });
+  document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on')); t.classList.add('on');
+    draw();
+  });
 
-            weatherChart.data.labels = slice.map(d => d.date);
-            weatherChart.data.datasets = [
-                { type: 'bar', label: 'Rain (mm)', data: slice.map(d => d.rain), backgroundColor: 'rgba(56, 189, 248, 0.3)', yAxisID: 'y2', order: 3 },
-                {
-                    type: 'line', label: 'Wind Speed (m/s)', data: slice.map(d => d.wind),
-                    borderColor: (ctx) => {
-                        const t = slice[ctx.p0DataIndex]?.type;
-                        return t === 'historical' ? '#64748b' : (t === 'real' ? '#38bdf8' : '#475569');
-                    },
-                    segment: { borderDash: (ctx) => slice[ctx.p0DataIndex]?.type === 'projected' ? [5, 5] : undefined },
-                    borderWidth: 2, pointRadius: (ctx) => slice[ctx.dataIndex]?.type === 'real' ? 3 : 0,
-                    fill: false, tension: 0.4, yAxisID: 'y', order: 2
-                },
-                { type: 'line', label: 'Wave (m)', data: slice.map(d => d.wave), borderColor: '#818cf8', borderWidth: 2, borderDash: [2, 3], pointRadius: 0, tension: 0.4, yAxisID: 'y1', order: 1 }
-            ];
-            weatherChart.update();
-        }
-
-        // Initialize Everything
-        window.onload = () => {
-            // Init Tide
-            initTideMap();
-            
-            // Init Weather
-            initWeatherDropdown();
-            initWeatherMap();
-            initWeatherChart();
-            changeWeatherLocation();
-        };
-
-    </script>
+  nextRef=Date.now()+6e5;
+  setInterval(tick,1000); tick();
+  selectStation('KTR',true); 
+});
+</script>
 </body>
 </html>
